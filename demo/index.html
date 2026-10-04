@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VaultProxy Playground</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #3b82f6;
+      --warning-bg: #451a03;
+      --warning-text: #fcd34d;
+      --warning-border: #78350f;
+    }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .banner {
+      background: var(--warning-bg);
+      color: var(--warning-text);
+      border: 1px solid var(--warning-border);
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-weight: bold;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+    h1 {
+      margin-top: 0;
+      font-size: 24px;
+    }
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    textarea {
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 15px;
+      min-height: 80px;
+      resize: vertical;
+    }
+    button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+      align-self: flex-start;
+    }
+    button:hover {
+      opacity: 0.9;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 20px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .card h3 {
+      margin-top: 0;
+      font-size: 16px;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: monospace;
+      font-size: 14px;
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="banner">⚠️ DEMO MODE: Use fake data only. Never send real PII.</div>
+    <h1>VaultProxy Privacy Playground</h1>
+    
+    <div class="input-group">
+      <textarea id="promptInput" placeholder="Type a prompt with sensitive Indian data (e.g. My PAN is ABCPB1234F, Aadhaar 367598341208, phone 9876543210)..."></textarea>
+      <button onclick="sendPrompt()">Send to Proxy</button>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>1. What You Typed</h3>
+        <pre id="panelTyped">Waiting for input...</pre>
+      </div>
+      <div class="card">
+        <h3>2. What the Cloud Saw (Masked Request)</h3>
+        <pre id="panelCloud">Waiting for request...</pre>
+      </div>
+      <div class="card">
+        <h3>3. Restored Reply</h3>
+        <pre id="panelRestored">Waiting for reply...</pre>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function sendPrompt() {
+      const text = document.getElementById('promptInput').value;
+      if (!text) return;
+
+      document.getElementById('panelTyped').textContent = text;
+      document.getElementById('panelCloud').textContent = "Loading masked request...";
+      document.getElementById('panelRestored').textContent = "Waiting for response...";
+
+      try {
+        const res = await fetch('/v1/chat/completions', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            model: 'gpt-4',
+            messages: [{role: 'user', content: text}]
+          })
+        });
+
+        const data = await res.json();
+        const content = data.choices[0].message.content;
+        document.getElementById('panelRestored').textContent = content;
+
+        // Fetch last request seen by cloud in demo mode
+        const lastRes = await fetch('/demo/last');
+        if (lastRes.ok) {
+          const lastData = await lastRes.json();
+          document.getElementById('panelCloud').textContent = JSON.stringify(lastData, null, 2);
+        }
+      } catch (err) {
+        document.getElementById('panelRestored').textContent = "Error: " + err.message;
+      }
+    }
+  </script>
+</body>
+</html>

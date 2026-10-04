@@ -3,7 +3,7 @@ import logging
 from typing import Dict, Any
 import httpx
 from fastapi import FastAPI, Request, Response, HTTPException
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse
 from vaultproxy.config import settings
 from vaultproxy.vault import RequestVault
 from vaultproxy.restore import restore_text, StreamRestorer
@@ -14,6 +14,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("vaultproxy")
 
 app = FastAPI(title="VaultProxy")
+
+LAST_MASKED_REQUEST: Dict[str, Any] = {}
 
 HOP_BY_HOP_HEADERS = {
     "host",
@@ -34,6 +36,24 @@ async def health():
     return {"status": "ok"}
 
 
+@app.get("/demo/last")
+async def demo_last():
+    if not settings.DEMO_MODE:
+        raise HTTPException(status_code=404, detail="Demo mode disabled.")
+    return LAST_MASKED_REQUEST
+
+
+@app.get("/demo", response_class=HTMLResponse)
+async def demo_page():
+    if not settings.DEMO_MODE:
+        raise HTTPException(status_code=404, detail="Demo mode disabled.")
+    try:
+        with open("demo/index.html", "r", encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="demo/index.html not found.")
+
+
 def clean_headers(request_headers: Request.headers) -> Dict[str, str]:
     headers = {}
     for key, value in request_headers.items():
@@ -46,6 +66,7 @@ def clean_headers(request_headers: Request.headers) -> Dict[str, str]:
 
 @app.post("/v1/chat/completions")
 async def chat_completions(request: Request):
+    global LAST_MASKED_REQUEST
     vault = RequestVault()
 
     # Mask incoming request (FAIL CLOSED on any masking/gemma error in strict mode)
@@ -62,6 +83,9 @@ async def chat_completions(request: Request):
                 degraded,
                 gemma_used,
             ) = await vault.mask_messages(body_json["messages"])
+
+        if settings.DEMO_MODE:
+            LAST_MASKED_REQUEST = body_json
 
         masked_body = json.dumps(body_json).encode("utf-8")
     except GemmaLayerError as gle:

@@ -1,0 +1,828 @@
+[
+  {
+    "text": "Hello, my name is Siddharth Verma. My Aadhaar is 304332181964 and PAN is ACGGA5774O. Contact me at +91 810851 30926 or email rohan29@gmail.com. Send money to UPI user814@paytm at IFSC SBIN0054597.",
+    "spans": [
+      {
+        "start": 49,
+        "end": 61,
+        "type": "AADHAAR"
+      },
+      {
+        "start": 73,
+        "end": 83,
+        "type": "PAN"
+      },
+      {
+        "start": 99,
+        "end": 115,
+        "type": "MOBILE"
+      },
+      {
+        "start": 125,
+        "end": 142,
+        "type": "EMAIL"
+      },
+      {
+        "start": 162,
+        "end": 175,
+        "type": "UPI_ID"
+      },
+      {
+        "start": 184,
+        "end": 195,
+        "type": "IFSC"
+      }
+    ]
+  },
+  {
+    "text": "Hello, my name is Siddharth Gupta. My Aadhaar is 361559407819 and PAN is ZJOGL5702J. Contact me at +91 640512 23238 or email siddharth30@company.in. Send money to UPI user489@ybl at IFSC SBIN0069429.",
+    "spans": [
+      {
+        "start": 49,
+        "end": 61,
+        "type": "AADHAAR"
+      },
+      {
+        "start": 73,
+        "end": 83,
+        "type": "PAN"
+      },
+      {
+        "start": 99,
+        "end": 115,
+        "type": "MOBILE"
+      },
+      {
+        "start": 125,
+        "end": 147,
+        "type": "EMAIL"
+      },
+      {
+        "start": 167,
+        "end": 178,
+        "type": "UPI_ID"
+      },
+      {
+        "start": 187,
+        "end": 198,
+        "type": "IFSC"
+      }
+    ]
+  },
+  {
+    "text": "Hello, my name is Rahul Gupta. My Aadhaar is 619283276483 and PAN is FITPH8840S. Contact me at +91 837869 95909 or email vikram28@company.in. Send money to UPI user611@paytm at IFSC SBIN0094259.",
+    "spans": [
+      {
+        "start": 45,
+        "end": 57,
+        "type": "AADHAAR"
+      },
+      {
+        "start": 69,
+        "end": 79,
+        "type": "PAN"
+      },
+      {
+        "start": 95,
+        "end": 111,
+        "type": "MOBILE"
+      },
+      {
+        "start": 121,
+        "end": 140,
+        "type": "EMAIL"
+      },
+      {
+        "start": 160,
+        "end": 173,
+        "type": "UPI_ID"
+      },
+      {
+        "start": 182,
+        "end": 193,
+        "type": "IFSC"
+      }
+    ]
+  },
+  {
+    "text": "Hello, my name is Priya Singh. My Aadhaar is 696965328711 and PAN is TWDHZ6535O. Contact me at +91 882512 11504 or email kavya44@company.in. Send money to UPI user796@oksbi at IFSC SBIN0099353.",
+    "spans": [
+      {
+        "start": 45,
+        "end": 57,
+        "type": "AADHAAR"
+      },
+      {
+        "start": 69,
+        "end": 79,
+        "type": "PAN"
+      },
+      {
+        "start": 95,
+        "end": 111,
+        "type": "MOBILE"
+      },
+      {
+        "start": 121,
+        "end": 139,
+        "type": "EMAIL"
+      },
+      {
+        "start": 159,
+        "end": 172,
+        "type": "UPI_ID"
+      },
+      {
+        "start": 181,
+        "end": 192,
+        "type": "IFSC"
+      }
+    ]
+  },
+  {
+    "text": "Hello, my name is Priya Reddy. My Aadhaar is 827048281481 and PAN is PDTJY9954D. Contact me at +91 850306 41385 or email priya20@org.net. Send money to UPI user159@okaxis at IFSC SBIN0084364.",
+    "spans": [
+      {
+        "start": 45,
+        "end": 57,
+        "type": "AADHAAR"
+      },
+      {
+        "start": 69,
+        "end": 79,
+        "type": "PAN"
+      },
+      {
+        "start": 95,
+        "end": 111,
+        "type": "MOBILE"
+      },
+      {
+        "start": 121,
+        "end": 136,
+        "type": "EMAIL"
+      },
+      {
+        "start": 156,
+        "end": 170,
+        "type": "UPI_ID"
+      },
+      {
+        "start": 179,
+        "end": 190,
+        "type": "IFSC"
+      }
+    ]
+  },
+  {
+    "text": "Hello, my name is Priya Sharma. My Aadhaar is 427824896387 and PAN is TRSBV6451H. Contact me at +91 654313 12757 or email amit38@example.com. Send money to UPI user702@okicici at IFSC SBIN0040161.",
+    "spans": [
+      {
+        "start": 46,
+        "end": 58,
+        "type": "AADHAAR"
+      },
+      {
+        "start": 70,
+        "end": 80,
+        "type": "PAN"
+      },
+      {
+        "start": 96,
+        "end": 112,
+        "type": "MOBILE"
+      },
+      {
+        "start": 122,
+        "end": 140,
+        "type": "EMAIL"
+      },
+      {
+        "start": 160,
+        "end": 175,
+        "type": "UPI_ID"
+      },
+      {
+        "start": 184,
+        "end": 195,
+        "type": "IFSC"
+      }
+    ]
+  },
+  {
+    "text": "Hello, my name is Siddharth Verma. My Aadhaar is 510518347387 and PAN is DYOLH7810N. Contact me at +91 865519 63883 or email priya17@org.net. Send money to UPI user578@oksbi at IFSC SBIN0098259.",
+    "spans": [
+      {
+        "start": 49,
+        "end": 61,
+        "type": "AADHAAR"
+      },
+      {
+        "start": 73,
+        "end": 83,
+        "type": "PAN"
+      },
+      {
+        "start": 99,
+        "end": 115,
+        "type": "MOBILE"
+      },
+      {
+        "start": 125,
+        "end": 140,
+        "type": "EMAIL"
+      },
+      {
+        "start": 160,
+        "end": 173,
+        "type": "UPI_ID"
+      },
+      {
+        "start": 182,
+        "end": 193,
+        "type": "IFSC"
+      }
+    ]
+  },
+  {
+    "text": "Hello, my name is Neha Sharma. My Aadhaar is 533872624736 and PAN is WBVJD0989Y. Contact me at +91 731798 63269 or email neha17@gmail.com. Send money to UPI user597@paytm at IFSC SBIN0038016.",
+    "spans": [
+      {
+        "start": 45,
+        "end": 57,
+        "type": "AADHAAR"
+      },
+      {
+        "start": 69,
+        "end": 79,
+        "type": "PAN"
+      },
+      {
+        "start": 95,
+        "end": 111,
+        "type": "MOBILE"
+      },
+      {
+        "start": 121,
+        "end": 137,
+        "type": "EMAIL"
+      },
+      {
+        "start": 157,
+        "end": 170,
+        "type": "UPI_ID"
+      },
+      {
+        "start": 179,
+        "end": 190,
+        "type": "IFSC"
+      }
+    ]
+  },
+  {
+    "text": "Hello, my name is Amit Gupta. My Aadhaar is 847468723434 and PAN is ZPOTB0495B. Contact me at +91 634356 18981 or email ananya61@example.com. Send money to UPI user709@oksbi at IFSC SBIN0098501.",
+    "spans": [
+      {
+        "start": 44,
+        "end": 56,
+        "type": "AADHAAR"
+      },
+      {
+        "start": 68,
+        "end": 78,
+        "type": "PAN"
+      },
+      {
+        "start": 94,
+        "end": 110,
+        "type": "MOBILE"
+      },
+      {
+        "start": 120,
+        "end": 140,
+        "type": "EMAIL"
+      },
+      {
+        "start": 160,
+        "end": 173,
+        "type": "UPI_ID"
+      },
+      {
+        "start": 182,
+        "end": 193,
+        "type": "IFSC"
+      }
+    ]
+  },
+  {
+    "text": "Hello, my name is Ananya Kumar. My Aadhaar is 291699854357 and PAN is GKRAO3704S. Contact me at +91 619602 80468 or email rahul54@example.com. Send money to UPI user318@okicici at IFSC SBIN0044760.",
+    "spans": [
+      {
+        "start": 46,
+        "end": 58,
+        "type": "AADHAAR"
+      },
+      {
+        "start": 70,
+        "end": 80,
+        "type": "PAN"
+      },
+      {
+        "start": 96,
+        "end": 112,
+        "type": "MOBILE"
+      },
+      {
+        "start": 122,
+        "end": 141,
+        "type": "EMAIL"
+      },
+      {
+        "start": 161,
+        "end": 176,
+        "type": "UPI_ID"
+      },
+      {
+        "start": 185,
+        "end": 196,
+        "type": "IFSC"
+      }
+    ]
+  },
+  {
+    "text": "Hello, my name is Aarav Kumar. My Aadhaar is 627849808412 and PAN is YDDCX5267G. Contact me at +91 876244 74032 or email neha45@example.com. Send money to UPI user357@oksbi at IFSC SBIN0022097.",
+    "spans": [
+      {
+        "start": 45,
+        "end": 57,
+        "type": "AADHAAR"
+      },
+      {
+        "start": 69,
+        "end": 79,
+        "type": "PAN"
+      },
+      {
+        "start": 95,
+        "end": 111,
+        "type": "MOBILE"
+      },
+      {
+        "start": 121,
+        "end": 139,
+        "type": "EMAIL"
+      },
+      {
+        "start": 159,
+        "end": 172,
+        "type": "UPI_ID"
+      },
+      {
+        "start": 181,
+        "end": 192,
+        "type": "IFSC"
+      }
+    ]
+  },
+  {
+    "text": "Hello, my name is Rahul Gupta. My Aadhaar is 442786801127 and PAN is OVPHN1387B. Contact me at +91 837535 99399 or email kavya62@testmail.com. Send money to UPI user355@oksbi at IFSC SBIN0056357.",
+    "spans": [
+      {
+        "start": 45,
+        "end": 57,
+        "type": "AADHAAR"
+      },
+      {
+        "start": 69,
+        "end": 79,
+        "type": "PAN"
+      },
+      {
+        "start": 95,
+        "end": 111,
+        "type": "MOBILE"
+      },
+      {
+        "start": 121,
+        "end": 141,
+        "type": "EMAIL"
+      },
+      {
+        "start": 161,
+        "end": 174,
+        "type": "UPI_ID"
+      },
+      {
+        "start": 183,
+        "end": 194,
+        "type": "IFSC"
+      }
+    ]
+  },
+  {
+    "text": "Hello, my name is Neha Reddy. My Aadhaar is 426025634217 and PAN is JBMFO3882V. Contact me at +91 762227 53025 or email siddharth92@testmail.com. Send money to UPI user385@oksbi at IFSC SBIN0046585.",
+    "spans": [
+      {
+        "start": 44,
+        "end": 56,
+        "type": "AADHAAR"
+      },
+      {
+        "start": 68,
+        "end": 78,
+        "type": "PAN"
+      },
+      {
+        "start": 94,
+        "end": 110,
+        "type": "MOBILE"
+      },
+      {
+        "start": 120,
+        "end": 144,
+        "type": "EMAIL"
+      },
+      {
+        "start": 164,
+        "end": 177,
+        "type": "UPI_ID"
+      },
+      {
+        "start": 186,
+        "end": 197,
+        "type": "IFSC"
+      }
+    ]
+  },
+  {
+    "text": "Hello, my name is Rohan Reddy. My Aadhaar is 701429401968 and PAN is IULJD3527A. Contact me at +91 757739 66531 or email siddharth94@example.com. Send money to UPI user171@ybl at IFSC SBIN0091678.",
+    "spans": [
+      {
+        "start": 45,
+        "end": 57,
+        "type": "AADHAAR"
+      },
+      {
+        "start": 69,
+        "end": 79,
+        "type": "PAN"
+      },
+      {
+        "start": 95,
+        "end": 111,
+        "type": "MOBILE"
+      },
+      {
+        "start": 121,
+        "end": 144,
+        "type": "EMAIL"
+      },
+      {
+        "start": 164,
+        "end": 175,
+        "type": "UPI_ID"
+      },
+      {
+        "start": 184,
+        "end": 195,
+        "type": "IFSC"
+      }
+    ]
+  },
+  {
+    "text": "Hello, my name is Rohan Reddy. My Aadhaar is 665648236626 and PAN is QHOPJ2456O. Contact me at +91 967954 98555 or email rahul94@example.com. Send money to UPI user318@okicici at IFSC SBIN0072021.",
+    "spans": [
+      {
+        "start": 45,
+        "end": 57,
+        "type": "AADHAAR"
+      },
+      {
+        "start": 69,
+        "end": 79,
+        "type": "PAN"
+      },
+      {
+        "start": 95,
+        "end": 111,
+        "type": "MOBILE"
+      },
+      {
+        "start": 121,
+        "end": 140,
+        "type": "EMAIL"
+      },
+      {
+        "start": 160,
+        "end": 175,
+        "type": "UPI_ID"
+      },
+      {
+        "start": 184,
+        "end": 195,
+        "type": "IFSC"
+      }
+    ]
+  },
+  {
+    "text": "Bhai Kavya Chawla ko bolo 9876510726 pe call kare. PAN number PTLGG7331W ready rakhe.",
+    "spans": [
+      {
+        "start": 62,
+        "end": 72,
+        "type": "PAN"
+      },
+      {
+        "start": 26,
+        "end": 36,
+        "type": "MOBILE"
+      }
+    ]
+  },
+  {
+    "text": "Bhai Rohan Chawla ko bolo 9876593579 pe call kare. PAN number VXLJO8742H ready rakhe.",
+    "spans": [
+      {
+        "start": 62,
+        "end": 72,
+        "type": "PAN"
+      },
+      {
+        "start": 26,
+        "end": 36,
+        "type": "MOBILE"
+      }
+    ]
+  },
+  {
+    "text": "Mera Aadhaar 634558122364 verify nahi ho raha, send email to amit58@org.net",
+    "spans": [
+      {
+        "start": 13,
+        "end": 25,
+        "type": "AADHAAR"
+      },
+      {
+        "start": 61,
+        "end": 75,
+        "type": "EMAIL"
+      }
+    ]
+  },
+  {
+    "text": "Bhai Rahul Chawla ko bolo 9876561645 pe call kare. PAN number AIRBX1416A ready rakhe.",
+    "spans": [
+      {
+        "start": 62,
+        "end": 72,
+        "type": "PAN"
+      },
+      {
+        "start": 26,
+        "end": 36,
+        "type": "MOBILE"
+      }
+    ]
+  },
+  {
+    "text": "Bhai Amit Patel ko bolo 9876515276 pe call kare. PAN number GCAJB9367U ready rakhe.",
+    "spans": [
+      {
+        "start": 60,
+        "end": 70,
+        "type": "PAN"
+      },
+      {
+        "start": 24,
+        "end": 34,
+        "type": "MOBILE"
+      }
+    ]
+  },
+  {
+    "text": "UPI ID raj832@ybl pe payment kar do, IFSC is HDFC0035995.",
+    "spans": [
+      {
+        "start": 7,
+        "end": 17,
+        "type": "UPI_ID"
+      },
+      {
+        "start": 45,
+        "end": 56,
+        "type": "IFSC"
+      }
+    ]
+  },
+  {
+    "text": "Mera Aadhaar 390586518501 verify nahi ho raha, send email to kavya71@org.net",
+    "spans": [
+      {
+        "start": 13,
+        "end": 25,
+        "type": "AADHAAR"
+      },
+      {
+        "start": 61,
+        "end": 76,
+        "type": "EMAIL"
+      }
+    ]
+  },
+  {
+    "text": "UPI ID raj110@ybl pe payment kar do, IFSC is HDFC0077715.",
+    "spans": [
+      {
+        "start": 7,
+        "end": 17,
+        "type": "UPI_ID"
+      },
+      {
+        "start": 45,
+        "end": 56,
+        "type": "IFSC"
+      }
+    ]
+  },
+  {
+    "text": "Bhai Kavya Patel ko bolo 9876542951 pe call kare. PAN number RJOTN9534J ready rakhe.",
+    "spans": [
+      {
+        "start": 61,
+        "end": 71,
+        "type": "PAN"
+      },
+      {
+        "start": 25,
+        "end": 35,
+        "type": "MOBILE"
+      }
+    ]
+  },
+  {
+    "text": "Mera Aadhaar 574989413438 verify nahi ho raha, send email to amit46@org.net",
+    "spans": [
+      {
+        "start": 13,
+        "end": 25,
+        "type": "AADHAAR"
+      },
+      {
+        "start": 61,
+        "end": 75,
+        "type": "EMAIL"
+      }
+    ]
+  },
+  {
+    "text": "UPI ID raj489@ybl pe payment kar do, IFSC is HDFC0069049.",
+    "spans": [
+      {
+        "start": 7,
+        "end": 17,
+        "type": "UPI_ID"
+      },
+      {
+        "start": 45,
+        "end": 56,
+        "type": "IFSC"
+      }
+    ]
+  },
+  {
+    "text": "Bhai Ananya Joshi ko bolo 9876519329 pe call kare. PAN number BALGP2277O ready rakhe.",
+    "spans": [
+      {
+        "start": 62,
+        "end": 72,
+        "type": "PAN"
+      },
+      {
+        "start": 26,
+        "end": 36,
+        "type": "MOBILE"
+      }
+    ]
+  },
+  {
+    "text": "Bhai Amit Mehta ko bolo 9876552247 pe call kare. PAN number LMHBI5400N ready rakhe.",
+    "spans": [
+      {
+        "start": 60,
+        "end": 70,
+        "type": "PAN"
+      },
+      {
+        "start": 24,
+        "end": 34,
+        "type": "MOBILE"
+      }
+    ]
+  },
+  {
+    "text": "Mera Aadhaar 690278742965 verify nahi ho raha, send email to neha80@example.com",
+    "spans": [
+      {
+        "start": 13,
+        "end": 25,
+        "type": "AADHAAR"
+      },
+      {
+        "start": 61,
+        "end": 79,
+        "type": "EMAIL"
+      }
+    ]
+  },
+  {
+    "text": "Bhai Rohan Reddy ko bolo 9876573532 pe call kare. PAN number NQMLY0212W ready rakhe.",
+    "spans": [
+      {
+        "start": 61,
+        "end": 71,
+        "type": "PAN"
+      },
+      {
+        "start": 25,
+        "end": 35,
+        "type": "MOBILE"
+      }
+    ]
+  },
+  {
+    "text": "AWS credentials leak: AKIAIOSFODNN7EXAMPLE in log file.",
+    "spans": [
+      {
+        "start": 22,
+        "end": 42,
+        "type": "SECRET"
+      }
+    ]
+  },
+  {
+    "text": "GitHub PAT found: github_pat_11AAAAAAA0123456789012_abcdefghijklmnopqrstuvwxyz",
+    "spans": [
+      {
+        "start": 18,
+        "end": 78,
+        "type": "SECRET"
+      }
+    ]
+  },
+  {
+    "text": "Order ID 123456789012 and invalid check 367598341209 should be ignored.",
+    "spans": []
+  },
+  {
+    "text": "Invalid PAN ABCXX1234F and bad IFSC SBIN1001234 should be ignored.",
+    "spans": []
+  },
+  {
+    "text": "Normal email user@example.com is not UPI.",
+    "spans": [
+      {
+        "start": 13,
+        "end": 29,
+        "type": "EMAIL"
+      }
+    ]
+  },
+  {
+    "text": "AWS credentials leak: AKIAIOSFODNN7EXAMPLE in log file.",
+    "spans": [
+      {
+        "start": 22,
+        "end": 42,
+        "type": "SECRET"
+      }
+    ]
+  },
+  {
+    "text": "GitHub PAT found: github_pat_11AAAAAAA0123456789012_abcdefghijklmnopqrstuvwxyz",
+    "spans": [
+      {
+        "start": 18,
+        "end": 78,
+        "type": "SECRET"
+      }
+    ]
+  },
+  {
+    "text": "Order ID 123456789012 and invalid check 367598341209 should be ignored.",
+    "spans": []
+  },
+  {
+    "text": "Invalid PAN ABCXX1234F and bad IFSC SBIN1001234 should be ignored.",
+    "spans": []
+  },
+  {
+    "text": "Normal email user@example.com is not UPI.",
+    "spans": [
+      {
+        "start": 13,
+        "end": 29,
+        "type": "EMAIL"
+      }
+    ]
+  }
+]
