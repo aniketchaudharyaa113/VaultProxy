@@ -7,6 +7,8 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from vaultproxy.config import settings
 from vaultproxy.vault import RequestVault
 from vaultproxy.restore import restore_text, StreamRestorer
+from vaultproxy.report import create_vault_report_header
+from vaultproxy.gemma_layer import GemmaLayerError
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("vaultproxy")
@@ -46,15 +48,28 @@ def clean_headers(request_headers: Request.headers) -> Dict[str, str]:
 async def chat_completions(request: Request):
     vault = RequestVault()
 
-    # Mask incoming request (FAIL CLOSED on any masking error)
+    # Mask incoming request (FAIL CLOSED on any masking/gemma error in strict mode)
     try:
         body_bytes = await request.body()
         body_json = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
 
+        degraded = False
+        gemma_used = False
+
         if "messages" in body_json and isinstance(body_json["messages"], list):
-            body_json["messages"] = vault.mask_messages(body_json["messages"])
+            (
+                body_json["messages"],
+                degraded,
+                gemma_used,
+            ) = await vault.mask_messages(body_json["messages"])
 
         masked_body = json.dumps(body_json).encode("utf-8")
+    except GemmaLayerError as gle:
+        logger.error(f"Fail-closed: Gemma layer error in STRICT_MODE: {gle}")
+        raise HTTPException(
+            status_code=503,
+            detail=f"VaultProxy fail-closed: Gemma layer error in STRICT_MODE. {gle}",
+        )
     except Exception as e:
         logger.error(
             f"Fail-closed: Error during request masking: {type(e).__name__}"
@@ -68,10 +83,23 @@ async def chat_completions(request: Request):
     headers["content-type"] = "application/json"
     url = f"{settings.UPSTREAM_BASE_URL.rstrip('/')}/v1/chat/completions"
 
+    report_header = create_vault_report_header(
+        masked_counts=vault.type_counts,
+        degraded=degraded,
+        gemma_used=gemma_used,
+    )
+
     try:
         client = httpx.AsyncClient(timeout=60.0)
         req = client.build_request("POST", url, headers=headers, content=masked_body)
         upstream_resp = await client.send(req, stream=True)
+
+        resp_headers = {
+            k: v
+            for k, v in upstream_resp.headers.items()
+            if k.lower() not in HOP_BY_HOP_HEADERS
+        }
+        resp_headers["x-vault-report"] = report_header
 
         if upstream_resp.headers.get("content-type", "").startswith(
             "text/event-stream"
@@ -85,7 +113,7 @@ async def chat_completions(request: Request):
                     async for chunk in upstream_resp.aiter_bytes():
                         line_buffer += chunk.decode("utf-8", errors="replace")
                         lines = line_buffer.split("\n")
-                        line_buffer = lines.pop()  # Keep partial last line in buffer
+                        line_buffer = lines.pop()
 
                         for line in lines:
                             line_str = line.strip()
@@ -132,7 +160,6 @@ async def chat_completions(request: Request):
                             else:
                                 yield f"{line_str}\n\n"
 
-                    # Handle remaining buffer after stream ends
                     if line_buffer.strip():
                         lb = line_buffer.strip()
                         if lb.startswith("data: "):
@@ -160,11 +187,6 @@ async def chat_completions(request: Request):
                     await upstream_resp.aclose()
                     await client.aclose()
 
-            resp_headers = {
-                k: v
-                for k, v in upstream_resp.headers.items()
-                if k.lower() not in HOP_BY_HOP_HEADERS
-            }
             return StreamingResponse(
                 stream_wrapper(),
                 status_code=upstream_resp.status_code,
@@ -175,12 +197,6 @@ async def chat_completions(request: Request):
             content = await upstream_resp.aread()
             await upstream_resp.aclose()
             await client.aclose()
-
-            resp_headers = {
-                k: v
-                for k, v in upstream_resp.headers.items()
-                if k.lower() not in HOP_BY_HOP_HEADERS
-            }
 
             try:
                 resp_json = json.loads(content.decode("utf-8"))
