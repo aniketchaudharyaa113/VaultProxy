@@ -22,7 +22,7 @@ app = FastAPI(title="VaultProxy")
 app.include_router(demo_router)
 
 if os.path.exists("demo/console"):
-    app.mount("/demo/console", StaticFiles(directory="demo/console"), name="console_static")
+    app.mount("/demo/console", StaticFiles(directory="demo/console", html=True), name="console_static")
 
 LAST_MASKED_REQUEST: Dict[str, Any] = {}
 
