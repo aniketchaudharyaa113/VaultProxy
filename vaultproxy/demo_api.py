@@ -31,17 +31,21 @@ async def demo_status():
 
     backend = settings.GEMMA_BACKEND.lower()
     reachable = False
+    model_name = settings.GEMMA_MODEL
 
-    if backend == "ollama":
+    if backend in ("ollama", "auto"):
         try:
             async with httpx.AsyncClient(timeout=2.0) as client:
                 resp = await client.get(f"{settings.OLLAMA_URL.rstrip('/')}/api/tags")
                 if resp.status_code == 200:
                     models_data = resp.json().get("models", [])
                     model_names = [m.get("name", "") for m in models_data]
-                    reachable = any(settings.GEMMA_MODEL in name for name in model_names) or len(models_data) > 0
+                    if model_names:
+                        reachable = True
+                        if not any(settings.GEMMA_MODEL in name for name in model_names):
+                            model_name = model_names[0]
         except Exception:
-            reachable = False
+            reachable = (backend == "auto")
     elif backend == "gemini":
         reachable = bool(settings.GEMINI_API_KEY)
     else:
@@ -51,7 +55,7 @@ async def demo_status():
 
     return {
         "gemma_backend": settings.GEMMA_BACKEND,
-        "model_name": settings.GEMMA_MODEL,
+        "model_name": model_name,
         "reachable": reachable,
         "strict_mode": settings.STRICT_MODE,
         "demo_mode": settings.DEMO_MODE,
@@ -197,7 +201,7 @@ async def demo_run(payload: Dict[str, Any]):
 
         return {
             "typed_text": text,
-            "cloud_saw": json.dumps(req_payload, indent=2),
+            "cloud_saw": json.dumps(req_payload, indent=2, ensure_ascii=False),
             "restored_reply": reply_text,
             "receipt": {"masked": {}, "degraded": False, "gemma_used": False},
             "timings_ms": {
@@ -299,7 +303,7 @@ async def demo_run(payload: Dict[str, Any]):
 
     return {
         "typed_text": text,
-        "cloud_saw": json.dumps(upstream_payload, indent=2),
+        "cloud_saw": json.dumps(upstream_payload, indent=2, ensure_ascii=False),
         "restored_reply": restored_reply,
         "receipt": {
             "masked": vault.type_counts,

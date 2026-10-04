@@ -80,6 +80,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 24px;
   box-shadow: 0 0 16px rgba(6, 182, 212, 0.2);
 }
 
@@ -364,6 +365,17 @@ body {
   pointer-events: none;
 }
 
+.error-alert {
+  background: rgba(244, 63, 94, 0.15);
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  color: #fca5a5;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 20px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 /* Glass Cards Grid */
 .inspection-grid {
   display: grid;
@@ -459,7 +471,7 @@ body {
   margin-top: 14px;
 }
 
-textarea#liveInput {
+textarea {
   width: 100%;
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
@@ -473,7 +485,7 @@ textarea#liveInput {
   transition: border-color 0.2s ease;
 }
 
-textarea#liveInput:focus {
+textarea:focus {
   border-color: var(--accent-cyan);
 }
 
@@ -509,6 +521,8 @@ textarea#liveInput:focus {
 .tag-EMAIL { background: rgba(244, 63, 94, 0.2); color: #fda4af; border-color: rgba(244, 63, 94, 0.4); }
 .tag-SECRET { background: rgba(239, 68, 68, 0.25); color: #fca5a5; border-color: rgba(239, 68, 68, 0.5); }
 .tag-IFSC { background: rgba(99, 102, 241, 0.2); color: #a5b4fc; border-color: rgba(99, 102, 241, 0.4); }
+.tag-PERSON { background: rgba(236, 72, 153, 0.2); color: #f472b6; border-color: rgba(236, 72, 153, 0.4); }
+.tag-ADDRESS { background: rgba(14, 165, 233, 0.2); color: #38bdf8; border-color: rgba(14, 165, 233, 0.4); }
 
 .src-badge {
   font-size: 9px;
@@ -519,6 +533,12 @@ textarea#liveInput:focus {
 
 .src-rule { background: rgba(255, 255, 255, 0.2); color: white; }
 .src-gemma { background: var(--accent-purple); color: white; }
+
+.verhoeff-tag {
+  font-size: 10px;
+  margin-left: 3px;
+  opacity: 0.9;
+}
 
 /* Code Viewports */
 .code-viewport {
@@ -734,7 +754,7 @@ textarea#liveInput:focus {
 }
 
 .empty-row {
-  text-center: center;
+  text-align: center;
   color: var(--text-sub);
   padding: 24px;
 }
@@ -752,12 +772,6 @@ textarea#liveInput:focus {
 }
 
 /* Benchmark Viewport */
-.bench-viewport {
-  font-family: 'Fira Code', monospace;
-  font-size: 13px;
-  line-height: 1.6;
-}
-
 .bench-table {
   width: 100%;
   border-collapse: collapse;
