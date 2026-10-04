@@ -1,9 +1,12 @@
+import os
 import json
 import logging
 from typing import Dict, Any
 import httpx
 from fastapi import FastAPI, Request, Response, HTTPException
 from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+
 from vaultproxy.config import settings
 from vaultproxy.vault import RequestVault
 from vaultproxy.restore import restore_text, StreamRestorer
@@ -17,6 +20,9 @@ logger = logging.getLogger("vaultproxy")
 app = FastAPI(title="VaultProxy")
 
 app.include_router(demo_router)
+
+if os.path.exists("demo/console"):
+    app.mount("/demo/console", StaticFiles(directory="demo/console"), name="console_static")
 
 LAST_MASKED_REQUEST: Dict[str, Any] = {}
 
@@ -39,6 +45,11 @@ async def health():
     return {"status": "ok"}
 
 
+@app.get("/favicon.ico")
+async def favicon():
+    return Response(status_code=204)
+
+
 @app.get("/demo/last")
 async def demo_last():
     if not settings.DEMO_MODE:
@@ -51,7 +62,6 @@ async def demo_page():
     if not settings.DEMO_MODE:
         raise HTTPException(status_code=404, detail="Demo mode disabled.")
     try:
-        # Try console index.html first, fallback to demo/index.html
         if os.path.exists("demo/console/index.html"):
             with open("demo/console/index.html", "r", encoding="utf-8") as f:
                 return f.read()
@@ -256,7 +266,6 @@ async def chat_completions(request: Request):
 
 
 if __name__ == "__main__":
-    import os
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8000)
