@@ -358,7 +358,7 @@ function App() {
   return (
     <div className="console-container">
       
-      <!-- Top Navigation Header -->
+      {/* Top Navigation Header */}
       <header className="header">
         <div className="brand-group">
           <div className="brand-logo">🛡️</div>
@@ -371,7 +371,7 @@ function App() {
           </div>
         </div>
 
-        <!-- Telemetry Status Chips -->
+        {/* Telemetry Status Chips */}
         <div className="status-chips">
           <div className={`chip ${status.reachable ? "active-green" : "active-red"}`}>
             <span className="chip-dot"></span>
@@ -386,7 +386,7 @@ function App() {
         </div>
       </header>
 
-      <!-- Main Navigation Tabs -->
+      {/* Main Navigation Tabs */}
       <nav className="nav-tabs">
         <button className={`nav-tab ${activeTab === "live" ? "active" : ""}`} onClick={() => setActiveTab("live")}>
           ⚡ Live Proxy Demo
