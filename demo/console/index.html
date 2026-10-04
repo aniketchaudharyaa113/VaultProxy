@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VaultProxy Judge Console</title>
+  <link rel="stylesheet" href="/demo/console/style.css">
+</head>
+<body>
+  <div class="console-container">
+    <!-- Header with Chips -->
+    <header class="header">
+      <div class="title-group">
+        <h1>VaultProxy Judge Console 🛡️🇮🇳</h1>
+        <span class="version-tag">v0.1-core</span>
+      </div>
+      <div class="chips-container" id="statusChips">
+        <div class="chip" id="chipGemmaBackend">Gemma: Loading...</div>
+        <div class="chip" id="chipReachable">Status: checking...</div>
+        <div class="chip" id="chipStrict">Strict: --</div>
+        <div class="chip" id="chipDemo">Demo: --</div>
+        <div class="chip" id="chipUpstream">Upstream: --</div>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="tabs">
+      <button class="tab-btn active" onclick="switchTab('live')">Live Proxy</button>
+      <button class="tab-btn" onclick="switchTab('gemma')">Gemma Impact</button>
+      <button class="tab-btn" onclick="switchTab('compare')">Raw vs Masked</button>
+      <button class="tab-btn" onclick="switchTab('streaming')">Stream Trace</button>
+      <button class="tab-btn" onclick="switchTab('failure')">Failure Modes</button>
+      <button class="tab-btn" onclick="switchTab('benchmark')">Benchmark Metrics</button>
+    </nav>
+
+    <!-- TAB 1: Live Proxy -->
+    <div id="tab-live" class="tab-content active">
+      <div class="preset-bar">
+        <span class="preset-label">Presets:</span>
+        <button class="btn-preset" onclick="loadPreset('loan')">1. Loan Application</button>
+        <button class="btn-preset" onclick="loadPreset('hinglish')">2. Hinglish WhatsApp</button>
+        <button class="btn-preset" onclick="loadPreset('devops')">3. DevOps Log Leak</button>
+        <button class="btn-preset" onclick="loadPreset('negatives')">4. Tricky Negatives</button>
+      </div>
+
+      <div class="controls-bar">
+        <label class="toggle-label"><input type="checkbox" id="toggleProxy" checked> Proxy Enabled</label>
+        <label class="toggle-label"><input type="checkbox" id="toggleGemma"> Gemma Layer</label>
+        <label class="toggle-label"><input type="checkbox" id="toggleStrict"> Strict Mode</label>
+        <label class="toggle-label"><input type="checkbox" id="toggleStream"> Streaming SSE</label>
+        <button class="btn-primary" onclick="runLiveRequest()">Run Request</button>
+      </div>
+
+      <div class="live-grid">
+        <div class="panel">
+          <h3>Input Text & Entity Spans</h3>
+          <textarea id="liveInput" rows="5" placeholder="Type or select a preset..."></textarea>
+          <div id="spanHighlightBox" class="highlight-box">Spans will be highlighted here...</div>
+        </div>
+        <div class="panel">
+          <h3>What the Cloud Saw (Masked Payload)</h3>
+          <pre id="liveCloudSaw" class="code-block">Waiting for execution...</pre>
+        </div>
+        <div class="panel">
+          <h3>Restored Client Reply</h3>
+          <pre id="liveRestoredReply" class="code-block">Waiting for response...</pre>
+        </div>
+      </div>
+
+      <div class="meta-row">
+        <div class="panel">
+          <h3>X-Vault-Report Privacy Receipt</h3>
+          <pre id="liveReceipt" class="code-block">{}</pre>
+        </div>
+        <div class="panel">
+          <h3>Performance Timings</h3>
+          <div id="timingBar" class="timing-bar-container">
+            <div class="timing-stat">Rules: <span id="timeRules">0ms</span></div>
+            <div class="timing-stat">Gemma: <span id="timeGemma">0ms</span></div>
+            <div class="timing-stat">Upstream: <span id="timeUpstream">0ms</span></div>
+            <div class="timing-stat">Restore: <span id="timeRestore">0ms</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: Gemma Impact -->
+    <div id="tab-gemma" class="tab-content">
+      <h2>Gemma Layer Impact Analysis</h2>
+      <p class="section-desc">Compares rules-only detection against rules + Gemma model intelligence on the current text.</p>
+      <button class="btn-primary" onclick="runGemmaImpact()">Analyze Impact</button>
+
+      <div id="gemmaNotice" class="notice-box hidden"></div>
+
+      <div class="impact-grid">
+        <div class="panel">
+          <h3>Rules Only Detection</h3>
+          <pre id="gemmaImpactRules" class="code-block">Run analysis to view...</pre>
+        </div>
+        <div class="panel">
+          <h3>Rules + Gemma Layer</h3>
+          <pre id="gemmaImpactCombo" class="code-block">Run analysis to view...</pre>
+        </div>
+      </div>
+      <div class="panel impact-summary">
+        <h3>Intelligence Summary</h3>
+        <div id="gemmaSummaryText">Click "Analyze Impact" to evaluate entity extraction differences.</div>
+      </div>
+    </div>
+
+    <!-- TAB 3: Compare Raw vs Masked -->
+    <div id="tab-compare" class="tab-content">
+      <h2>Privacy Comparison: Proxy OFF vs Proxy ON</h2>
+      <p class="section-desc">Demonstrates the raw PII data leak when sending unmasked prompts straight to the cloud versus VaultProxy.</p>
+      <button class="btn-primary" onclick="runCompareTest()">Run Side-by-Side Comparison</button>
+
+      <div class="impact-grid">
+        <div class="panel danger-border">
+          <h3 class="text-danger">⚠️ Proxy OFF (Raw Leak)</h3>
+          <pre id="compareRawCloud" class="code-block">Waiting to run...</pre>
+        </div>
+        <div class="panel success-border">
+          <h3 class="text-success">🛡️ Proxy ON (Vault Protected)</h3>
+          <pre id="compareMaskedCloud" class="code-block">Waiting to run...</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: Streaming Trace -->
+    <div id="tab-streaming" class="tab-content">
+      <h2>Streaming Token Restorer Trace</h2>
+      <p class="section-desc">Step-through view showing how StreamRestorer buffers partial tokens across SSE chunks.</p>
+      <button class="btn-primary" onclick="runStreamTrace()">Start Trace</button>
+
+      <div class="trace-table-container">
+        <table class="trace-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Upstream SSE Chunk</th>
+              <th>Held Buffer (Partial Token)</th>
+              <th>Emitted Text to Client</th>
+            </tr>
+          </thead>
+          <tbody id="traceTableBody">
+            <tr><td colspan="4" class="text-center">Click "Start Trace" to observe SSE stream buffering.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB 5: Failure Modes -->
+    <div id="tab-failure" class="tab-content">
+      <h2>Fail-Closed Safety & Degraded State Simulation</h2>
+      <p class="section-desc">Simulate a backend Gemma failure or connection drop to test VaultProxy fallback behavior.</p>
+
+      <div class="sim-actions">
+        <button class="btn-danger" onclick="simulateGemmaMode('gemma_down')">🔴 Simulate Gemma Down</button>
+        <button class="btn-success" onclick="simulateGemmaMode('reset')">🟢 Reset to Normal</button>
+        <span id="simStatus" class="sim-status">Status: Normal Operation</span>
+      </div>
+
+      <div class="impact-grid">
+        <div class="panel">
+          <h3>STRICT_MODE = false (Degraded Fallback)</h3>
+          <p>Rule-based masking continues. Header returns <code>degraded: true</code>.</p>
+          <button class="btn-secondary" onclick="runFailureTest(false)">Test Non-Strict Mode</button>
+          <pre id="failNonStrictOut" class="code-block">Result will appear here...</pre>
+        </div>
+        <div class="panel danger-border">
+          <h3>STRICT_MODE = true (Fail-Closed 503)</h3>
+          <p>Forwards NOTHING upstream. Returns HTTP 503 error response.</p>
+          <button class="btn-danger" onclick="runFailureTest(true)">Test Strict Mode (503)</button>
+          <pre id="failStrictOut" class="code-block">Result will appear here...</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 6: Benchmark -->
+    <div id="tab-benchmark" class="tab-content">
+      <h2>VaultProxy Benchmark Metrics</h2>
+      <button class="btn-secondary" onclick="loadBenchmark()">Refresh Metrics</button>
+      <div id="benchTableBox" class="bench-box">Loading benchmark data...</div>
+      <div class="caveat-banner">
+        ℹ️ Note: Evaluated on synthetic seeded test dataset (40 samples). See held-out evaluation set for offline verification.
+      </div>
+    </div>
+  </div>
+
+  <script src="/demo/console/app.js"></script>
+</body>
+</html>

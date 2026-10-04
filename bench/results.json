@@ -1,0 +1,69 @@
+{
+  "mode": "Rules Only",
+  "metrics": {
+    "AADHAAR": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "tp": 19,
+      "fp": 0,
+      "fn": 0
+    },
+    "EMAIL": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "tp": 21,
+      "fp": 0,
+      "fn": 0
+    },
+    "IFSC": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "tp": 18,
+      "fp": 0,
+      "fn": 0
+    },
+    "MOBILE": {
+      "precision": 1.0,
+      "recall": 0.3478,
+      "f1": 0.5161,
+      "tp": 8,
+      "fp": 0,
+      "fn": 15
+    },
+    "PAN": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "tp": 23,
+      "fp": 0,
+      "fn": 0
+    },
+    "SECRET": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "tp": 4,
+      "fp": 0,
+      "fn": 0
+    },
+    "UPI_ID": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "tp": 18,
+      "fp": 0,
+      "fn": 0
+    }
+  },
+  "overall": {
+    "precision": 1.0,
+    "recall": 0.881,
+    "f1": 0.9367,
+    "tp": 111,
+    "fp": 0,
+    "fn": 15
+  }
+}

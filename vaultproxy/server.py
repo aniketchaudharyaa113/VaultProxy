@@ -9,11 +9,14 @@ from vaultproxy.vault import RequestVault
 from vaultproxy.restore import restore_text, StreamRestorer
 from vaultproxy.report import create_vault_report_header
 from vaultproxy.gemma_layer import GemmaLayerError
+from vaultproxy.demo_api import router as demo_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("vaultproxy")
 
 app = FastAPI(title="VaultProxy")
+
+app.include_router(demo_router)
 
 LAST_MASKED_REQUEST: Dict[str, Any] = {}
 
@@ -48,10 +51,14 @@ async def demo_page():
     if not settings.DEMO_MODE:
         raise HTTPException(status_code=404, detail="Demo mode disabled.")
     try:
+        # Try console index.html first, fallback to demo/index.html
+        if os.path.exists("demo/console/index.html"):
+            with open("demo/console/index.html", "r", encoding="utf-8") as f:
+                return f.read()
         with open("demo/index.html", "r", encoding="utf-8") as f:
             return f.read()
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="demo/index.html not found.")
+        raise HTTPException(status_code=404, detail="demo/console/index.html not found.")
 
 
 def clean_headers(request_headers: Request.headers) -> Dict[str, str]:
@@ -249,6 +256,7 @@ async def chat_completions(request: Request):
 
 
 if __name__ == "__main__":
+    import os
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8000)
