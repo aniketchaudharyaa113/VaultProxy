@@ -1,11 +1,175 @@
 {
   "mode": "Rules Only",
+  "generated": {
+    "metrics": {
+      "AADHAAR": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "tp": 23,
+        "fp": 0,
+        "fn": 0
+      },
+      "EMAIL": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "tp": 25,
+        "fp": 0,
+        "fn": 0
+      },
+      "IFSC": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "tp": 21,
+        "fp": 0,
+        "fn": 0
+      },
+      "MOBILE": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "tp": 16,
+        "fp": 0,
+        "fn": 0
+      },
+      "PAN": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "tp": 16,
+        "fp": 0,
+        "fn": 0
+      },
+      "SECRET": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "tp": 4,
+        "fp": 0,
+        "fn": 0
+      },
+      "UPI_ID": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "tp": 21,
+        "fp": 0,
+        "fn": 0
+      }
+    },
+    "overall": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "tp": 126,
+      "fp": 0,
+      "fn": 0,
+      "mean_latency_ms": 0.03
+    },
+    "false_positives": [],
+    "false_negatives": []
+  },
+  "heldout": {
+    "metrics": {
+      "AADHAAR": {
+        "precision": 0.5,
+        "recall": 0.5,
+        "f1": 0.5,
+        "tp": 1,
+        "fp": 1,
+        "fn": 1
+      },
+      "EMAIL": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      },
+      "IFSC": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      },
+      "MOBILE": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      },
+      "PAN": {
+        "precision": 0.5,
+        "recall": 0.5,
+        "f1": 0.5,
+        "tp": 1,
+        "fp": 1,
+        "fn": 1
+      },
+      "SECRET": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      },
+      "UPI_ID": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      }
+    },
+    "overall": {
+      "precision": 0.7778,
+      "recall": 0.7778,
+      "f1": 0.7778,
+      "tp": 7,
+      "fp": 2,
+      "fn": 2,
+      "mean_latency_ms": 0.02
+    },
+    "false_positives": [
+      {
+        "sample_index": 4,
+        "type": "AADHAAR",
+        "text": "\u09e9\u09ec\u09ed\u09eb\u09ef\u09ee\u09e9\u09ea\u09e7\u09e8\u09e6\u09e9"
+      },
+      {
+        "sample_index": 4,
+        "type": "PAN",
+        "text": "ABCPB1234F"
+      }
+    ],
+    "false_negatives": [
+      {
+        "sample_index": 4,
+        "type": "AADHAAR",
+        "text": "ali digits \u0986"
+      },
+      {
+        "sample_index": 4,
+        "type": "PAN",
+        "text": "\u09ee\u09e9\u09ea\u09e7\u09e8\u09e6\u09e9 an"
+      }
+    ]
+  },
   "metrics": {
     "AADHAAR": {
       "precision": 1.0,
       "recall": 1.0,
       "f1": 1.0,
-      "tp": 19,
+      "tp": 23,
       "fp": 0,
       "fn": 0
     },
@@ -13,7 +177,7 @@
       "precision": 1.0,
       "recall": 1.0,
       "f1": 1.0,
-      "tp": 21,
+      "tp": 25,
       "fp": 0,
       "fn": 0
     },
@@ -21,23 +185,23 @@
       "precision": 1.0,
       "recall": 1.0,
       "f1": 1.0,
-      "tp": 18,
+      "tp": 21,
       "fp": 0,
       "fn": 0
     },
     "MOBILE": {
       "precision": 1.0,
-      "recall": 0.3478,
-      "f1": 0.5161,
-      "tp": 8,
+      "recall": 1.0,
+      "f1": 1.0,
+      "tp": 16,
       "fp": 0,
-      "fn": 15
+      "fn": 0
     },
     "PAN": {
       "precision": 1.0,
       "recall": 1.0,
       "f1": 1.0,
-      "tp": 23,
+      "tp": 16,
       "fp": 0,
       "fn": 0
     },
@@ -53,17 +217,18 @@
       "precision": 1.0,
       "recall": 1.0,
       "f1": 1.0,
-      "tp": 18,
+      "tp": 21,
       "fp": 0,
       "fn": 0
     }
   },
   "overall": {
     "precision": 1.0,
-    "recall": 0.881,
-    "f1": 0.9367,
-    "tp": 111,
+    "recall": 1.0,
+    "f1": 1.0,
+    "tp": 126,
     "fp": 0,
-    "fn": 15
+    "fn": 0,
+    "mean_latency_ms": 0.03
   }
 }

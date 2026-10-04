@@ -1,17 +1,24 @@
 // VaultProxy Judge Console Controller
+let debounceTimer = null;
 
 document.addEventListener("DOMContentLoaded", () => {
   fetchStatus();
-  setInterval(fetchStatus, 5000);
+  setInterval(fetchStatus, 4000);
   loadPreset("loan");
 });
 
 function switchTab(tabId) {
-  document.querySelectorAll(".tab-btn").forEach((btn) => btn.classList.remove("active"));
+  document.querySelectorAll(".nav-tab").forEach((btn) => btn.classList.remove("active"));
   document.querySelectorAll(".tab-content").forEach((ct) => ct.classList.remove("active"));
 
-  event.target.classList.add("active");
-  document.getElementById(`tab-${tabId}`).classList.add("active");
+  if (event && event.currentTarget) {
+    event.currentTarget.classList.add("active");
+  }
+  
+  const targetTab = document.getElementById(`tab-${tabId}`);
+  if (targetTab) {
+    targetTab.classList.add("active");
+  }
 
   if (tabId === "benchmark") {
     loadBenchmark();
@@ -24,26 +31,26 @@ async function fetchStatus() {
     if (!res.ok) return;
     const data = await res.json();
 
-    document.getElementById("chipGemmaBackend").textContent = `Gemma: ${data.gemma_backend}`;
+    document.getElementById("chipGemmaBackend").innerHTML = `<span class="chip-dot"></span>Gemma: ${data.gemma_backend}`;
 
     const reachEl = document.getElementById("chipReachable");
     if (data.reachable) {
-      reachEl.textContent = `Status: ${data.model_name} (Ready)`;
+      reachEl.innerHTML = `<span class="chip-dot"></span>Status: ${data.model_name} (Ready)`;
       reachEl.className = "chip active-green";
     } else {
-      reachEl.textContent = `Status: ${data.gemma_backend === "off" ? "Off" : "Unreachable"}`;
+      reachEl.innerHTML = `<span class="chip-dot"></span>Status: ${data.gemma_backend === "off" ? "Off" : "Unreachable"}`;
       reachEl.className = data.gemma_backend === "off" ? "chip" : "chip active-red";
     }
 
-    document.getElementById("chipStrict").textContent = `Strict: ${data.strict_mode}`;
-    document.getElementById("chipDemo").textContent = `Demo: ${data.demo_mode}`;
-    document.getElementById("chipUpstream").textContent = `Upstream: ${data.upstream_host}`;
+    document.getElementById("chipStrict").innerHTML = `<span class="chip-dot"></span>Strict: ${data.strict_mode}`;
+    document.getElementById("chipDemo").innerHTML = `<span class="chip-dot"></span>Demo: ${data.demo_mode ? "ON" : "OFF"}`;
+    document.getElementById("chipUpstream").innerHTML = `<span class="chip-dot"></span>Upstream: ${data.upstream_host}`;
   } catch (e) {
     console.error("Status fetch failed", e);
   }
 }
 
-// Verhoeff checksum algorithm in JS for dynamic fake Aadhaar generation
+// Verhoeff checksum algorithm for dynamic fake Aadhaar generation
 const d_table = [
   [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
   [1, 2, 3, 4, 0, 6, 7, 8, 9, 5],
@@ -83,18 +90,29 @@ function generateDynamicAadhaar() {
   return prefix + check;
 }
 
-function loadPreset(key) {
+function loadPreset(key, evt) {
+  if (evt && evt.currentTarget) {
+    document.querySelectorAll(".preset-btn").forEach(b => b.classList.remove("active"));
+    evt.currentTarget.classList.add("active");
+  }
+
   const aadhaar = generateDynamicAadhaar();
   const presets = {
     loan: `Hello, I am applying for a personal loan. My name is Rajesh Sharma, residing at Flat 402, Green Glen Layout, Bellandur, Bengaluru. My Aadhaar is ${aadhaar}, PAN is ABCPB1234F, and mobile is 9876543210. Pay processing fee to rajesh@oksbi.`,
     hinglish: `Bhai Vikram ko bolo 9876543210 pe call kare. Uska PAN number XYZPH9876K and Aadhaar ${aadhaar} verify karna hai.`,
     devops: `[ERROR] Production deploy failed! AWS key AKIAIOSFODNN7EXAMPLE leaked in log file. GitHub PAT token: github_pat_11AAAAAAA0123456789012_abcdefghijklmnopqrstuvwxyz. Admin email: devsec@company.in`,
-    negatives: `Order ID 123456789012 was processed. Invalid check number 367598341209 and bad PAN ABCXX1234F should be ignored. Product code SBIN1001234 is not IFSC.`
+    negatives: `Order ID 123456789012 was processed. Invalid check number 367598341209 and bad PAN ABCXX1234F should be ignored. Product code SBIN1001234 is not IFSC.`,
+    bengali: `আমার আধার নম্বর ৩৬৭৫৯৮৩৪১২০৩ এবং মোবাইল ৯৮Nz৪৩২১০।`.replace("Nz", "৭৬৫")
   };
 
   const text = presets[key] || "";
   document.getElementById("liveInput").value = text;
   runAnalyze();
+}
+
+function debounceAnalyze() {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(runAnalyze, 250);
 }
 
 async function runAnalyze() {
@@ -107,6 +125,10 @@ async function runAnalyze() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text, use_gemma: useGemma })
     });
+    if (!res.ok) {
+      console.error("Analyze error status:", res.status);
+      return;
+    }
     const data = await res.json();
     renderSpans(text, data.spans);
   } catch (e) {
@@ -117,7 +139,7 @@ async function runAnalyze() {
 function renderSpans(text, spans) {
   const box = document.getElementById("spanHighlightBox");
   if (!spans || spans.length === 0) {
-    box.textContent = text;
+    box.textContent = text || "No entities detected.";
     return;
   }
 
@@ -127,11 +149,12 @@ function renderSpans(text, spans) {
   spans.forEach((span) => {
     html += escapeHtml(text.substring(lastIdx, span.start));
     const entityText = escapeHtml(text.substring(span.start, span.end));
-    const badgeClass = span.source === "rule" ? "badge-rule" : "badge-gemma";
-    const badgeLabel = span.source === "rule" ? "RULE" : "GEMMA";
-    const chkText = span.type === "AADHAAR" ? ` | Verhoeff: ${span.checksum_valid}` : "";
+    const srcClass = span.source === "rule" ? "src-rule" : "src-gemma";
+    const srcLabel = span.source === "rule" ? "RULE" : "GEMMA";
+    const tagClass = `tag-${span.type}`;
+    const chkText = span.type === "AADHAAR" ? ` (Verhoeff: ${span.checksum_valid ? 'Valid' : 'Invalid'})` : "";
 
-    html += `<span class="span-entity entity-${span.type}" title="Type: ${span.type} | Source: ${span.source} | Score: ${span.score}${chkText}">${entityText}<span class="${badgeClass}">${badgeLabel}</span></span>`;
+    html += `<span class="span-tag ${tagClass}" title="Type: ${span.type} | Source: ${span.source} | Score: ${span.score}">${entityText}<span class="src-badge ${srcClass}">${srcLabel}</span>${chkText}</span>`;
     lastIdx = span.end;
   });
 
@@ -144,14 +167,18 @@ function escapeHtml(str) {
 }
 
 async function runLiveRequest() {
+  const btn = document.getElementById("btnRunRequest");
   const text = document.getElementById("liveInput").value;
   const proxy = document.getElementById("toggleProxy").checked;
   const useGemma = document.getElementById("toggleGemma").checked;
   const strict = document.getElementById("toggleStrict").checked;
   const stream = document.getElementById("toggleStream").checked;
 
-  document.getElementById("liveCloudSaw").textContent = "Sending request...";
-  document.getElementById("liveRestoredReply").textContent = "Waiting for response...";
+  btn.classList.add("loading");
+  btn.innerHTML = `<span class="btn-icon">⏳</span> Processing Proxy Request...`;
+
+  document.getElementById("liveCloudSaw").textContent = "Encrypting & tokenizing payload for cloud upstream...";
+  document.getElementById("liveRestoredReply").textContent = "Awaiting response & restoring tokenized values...";
 
   try {
     const res = await fetch("/demo/run", {
@@ -161,136 +188,151 @@ async function runLiveRequest() {
     });
 
     if (!res.ok) {
-      const errText = await res.text();
-      document.getElementById("liveRestoredReply").textContent = `HTTP ${res.status}: ${errText}`;
+      const errData = await res.json().catch(() => ({ detail: res.statusText }));
+      const detailMsg = errData.detail || "Proxy server request error";
+      document.getElementById("liveCloudSaw").textContent = `Request terminated with status ${res.status}`;
+      document.getElementById("liveRestoredReply").innerHTML = `<div class="text-danger"><strong>HTTP ${res.status} Error:</strong><br>${escapeHtml(detailMsg)}</div>`;
       return;
     }
 
     const data = await res.json();
-    document.getElementById("liveCloudSaw").textContent = data.cloud_saw;
+
+    // Highlight masked tokens in cloud saw HTML
+    let cloudSawHtml = escapeHtml(data.cloud_saw);
+    cloudSawHtml = cloudSawHtml.replace(/(\\[[A-Z_]+_\d+\\])/g, '<span class="cloud-token-highlight">$1</span>');
+    document.getElementById("liveCloudSaw").innerHTML = cloudSawHtml;
+
     document.getElementById("liveRestoredReply").textContent = data.restored_reply;
     document.getElementById("liveReceipt").textContent = JSON.stringify(data.receipt, null, 2);
 
-    document.getElementById("timeRules").textContent = `${data.timings_ms.rules}ms`;
-    document.getElementById("timeGemma").textContent = `${data.timings_ms.gemma}ms`;
-    document.getElementById("timeUpstream").textContent = `${data.timings_ms.upstream}ms`;
-    document.getElementById("timeRestore").textContent = `${data.timings_ms.restore}ms`;
+    document.getElementById("timeRules").textContent = `${data.timings_ms.rules} ms`;
+    document.getElementById("timeGemma").textContent = `${data.timings_ms.gemma} ms`;
+    document.getElementById("timeUpstream").textContent = `${data.timings_ms.upstream} ms`;
+    document.getElementById("timeRestore").textContent = `${data.timings_ms.restore} ms`;
   } catch (e) {
-    document.getElementById("liveRestoredReply").textContent = "Error: " + e.message;
+    document.getElementById("liveRestoredReply").innerHTML = `<div class="text-danger">Network Error: ${escapeHtml(e.message)}</div>`;
+  } finally {
+    btn.classList.remove("loading");
+    btn.innerHTML = `<span class="btn-icon">🚀</span> Execute Proxy Request`;
   }
 }
 
 async function runGemmaImpact() {
   const text = document.getElementById("liveInput").value;
+  
+  document.getElementById("gemmaImpactRules").textContent = "Running baseline regex analysis...";
+  document.getElementById("gemmaImpactCombo").textContent = "Running combined Gemma SLM evaluation...";
 
   try {
-    const rRules = await fetch("/demo/analyze", {
+    const resRules = await fetch("/demo/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text, use_gemma: false })
     });
-    const dataRules = await rRules.json();
+    const dataRules = await resRules.json();
 
-    const rCombo = await fetch("/demo/analyze", {
+    const resCombo = await fetch("/demo/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text, use_gemma: true })
     });
-    const dataCombo = await rCombo.json();
+    const dataCombo = await resCombo.json();
 
-    document.getElementById("gemmaImpactRules").textContent = JSON.stringify(dataRules, null, 2);
-    document.getElementById("gemmaImpactCombo").textContent = JSON.stringify(dataCombo, null, 2);
+    document.getElementById("gemmaImpactRules").textContent = JSON.stringify(dataRules.spans, null, 2);
+    document.getElementById("gemmaImpactCombo").textContent = JSON.stringify(dataCombo.spans, null, 2);
 
-    const rulesTypes = dataRules.spans.map((s) => `${s.type}: "${s.text}"`);
-    const comboTypes = dataCombo.spans.map((s) => `${s.type}: "${s.text}"`);
+    const rulesCount = dataRules.spans.length;
+    const comboCount = dataCombo.spans.length;
+    const gemmaFound = dataCombo.spans.filter(s => s.source === "gemma").length;
 
-    const gemmaAdded = dataCombo.spans.filter((s) => s.source === "gemma").map((s) => `${s.type}: "${s.text}"`);
-
-    let summary = `Rules alone detected: [${rulesTypes.join(", ")}].\n`;
-    if (gemmaAdded.length > 0) {
-      summary += `✨ Gemma added: [${gemmaAdded.join(", ")}] in ${dataCombo.timings_ms.gemma}ms.`;
-    } else {
-      summary += `Gemma layer added 0 extra entities (Gemma off or all covered by rules).`;
-    }
-
-    document.getElementById("gemmaSummaryText").textContent = summary;
+    document.getElementById("gemmaSummaryText").innerHTML = `
+      <strong>Analysis Result:</strong> Baseline regex extracted <strong>${rulesCount}</strong> spans.<br>
+      Combined engine extracted <strong>${comboCount}</strong> spans (including <strong>${gemmaFound}</strong> complex/ambiguous spans captured by Gemma SLM).
+    `;
   } catch (e) {
-    document.getElementById("gemmaSummaryText").textContent = "Impact analysis error: " + e.message;
+    console.error("Gemma impact evaluation failed", e);
   }
 }
 
 async function runCompareTest() {
   const text = document.getElementById("liveInput").value;
 
-  try {
-    const rOff = await fetch("/demo/run", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, proxy: false })
-    });
-    const dOff = await rOff.json();
-    document.getElementById("compareRawCloud").textContent = dOff.cloud_saw;
+  document.getElementById("compareRawCloud").textContent = "Executing raw request (Proxy OFF)...";
+  document.getElementById("compareMaskedCloud").textContent = "Executing tokenized request (Proxy ON)...";
 
-    const rOn = await fetch("/demo/run", {
+  try {
+    const rawRes = await fetch("/demo/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, proxy: true })
+      body: JSON.stringify({ text, proxy: false, stream: false })
     });
-    const dOn = await rOn.json();
-    document.getElementById("compareMaskedCloud").textContent = dOn.cloud_saw;
+    const rawData = await rawRes.json();
+    document.getElementById("compareRawCloud").textContent = rawData.cloud_saw;
+
+    const maskedRes = await fetch("/demo/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, proxy: true, stream: false })
+    });
+    const maskedData = await maskedRes.json();
+    
+    let cloudSawHtml = escapeHtml(maskedData.cloud_saw);
+    cloudSawHtml = cloudSawHtml.replace(/(\\[[A-Z_]+_\d+\\])/g, '<span class="cloud-token-highlight">$1</span>');
+    document.getElementById("compareMaskedCloud").innerHTML = cloudSawHtml;
   } catch (e) {
-    console.error(e);
+    console.error("Compare test failed", e);
   }
 }
 
 async function runStreamTrace() {
   const text = document.getElementById("liveInput").value;
   const tbody = document.getElementById("traceTableBody");
-  tbody.innerHTML = "";
+  tbody.innerHTML = `<tr><td colspan="4" class="empty-row">Connecting to stream trace...</td></tr>`;
 
   try {
-    const response = await fetch("/demo/stream-trace", {
+    const res = await fetch("/demo/stream-trace", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text })
     });
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let count = 0;
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let step = 1;
+    tbody.innerHTML = "";
 
     while (true) {
-      const { value, done } = await reader.read();
+      const { done, value } = await reader.read();
       if (done) break;
 
       const chunkStr = decoder.decode(value);
       const lines = chunkStr.split("\n");
 
-      lines.forEach((line) => {
-        if (line.startsWith("data: ")) {
-          const payloadStr = line.substring(6).strip ? line.substring(6).strip() : line.substring(6).trim();
-          if (payloadStr === "[DONE]") return;
+      for (let line of lines) {
+        line = line.strip ? line.strip() : line.trim();
+        if (!line.startsWith("data: ")) continue;
+        const payloadStr = line.substring(6).trim();
+        if (payloadStr === "[DONE]") break;
 
-          try {
-            const event = JSON.parse(payloadStr);
-            count++;
-            const tr = document.createElement("tr");
+        try {
+          const item = JSON.parse(payloadStr);
+          const tr = document.createElement("tr");
+          const chunkDisp = escapeHtml(item.upstream_chunk || "—");
+          const bufferDisp = item.held_buffer ? `<span class="held-buffer-tag">${escapeHtml(item.held_buffer)}</span>` : "—";
+          const emittedDisp = item.emitted ? `<span class="emitted-tag">${escapeHtml(item.emitted)}</span>` : "—";
 
-            const heldHtml = event.held_buffer ? `<span class="held-highlight">${escapeHtml(event.held_buffer)}</span>` : "<em>empty</em>";
-
-            tr.innerHTML = `
-              <td>${count}</td>
-              <td><code>${escapeHtml(event.upstream_chunk)}</code></td>
-              <td>${heldHtml}</td>
-              <td><code>${escapeHtml(event.emitted)}</code></td>
-            `;
-            tbody.appendChild(tr);
-          } catch (err) {}
-        }
-      });
+          tr.innerHTML = `
+            <td>#${step++}</td>
+            <td><code>${chunkDisp}</code></td>
+            <td>${bufferDisp}</td>
+            <td>${emittedDisp}</td>
+          `;
+          tbody.appendChild(tr);
+        } catch (err) {}
+      }
     }
   } catch (e) {
-    console.error("Stream trace error", e);
+    tbody.innerHTML = `<tr><td colspan="4" class="text-danger">Stream trace error: ${escapeHtml(e.message)}</td></tr>`;
   }
 }
 
@@ -304,21 +346,22 @@ async function simulateGemmaMode(mode) {
     const data = await res.json();
     const statusEl = document.getElementById("simStatus");
     if (data.simulated_gemma_down) {
-      statusEl.textContent = "Status: 🔴 Gemma Connection DOWN (Simulated)";
-      statusEl.className = "sim-status text-danger";
+      statusEl.textContent = "Status: 🔴 Simulated Gemma SLM Connection Timeout";
+      statusEl.className = "sim-badge border-danger text-danger";
     } else {
-      statusEl.textContent = "Status: 🟢 Normal Operation";
-      statusEl.className = "sim-status text-success";
+      statusEl.textContent = "Status: 🟢 Normal Engine Operation";
+      statusEl.className = "sim-badge";
     }
   } catch (e) {
-    console.error(e);
+    console.error("Simulate request failed", e);
   }
 }
 
 async function runFailureTest(strict) {
   const text = document.getElementById("liveInput").value;
-  const outEl = strict ? document.getElementById("failStrictOut") : document.getElementById("failNonStrictOut");
-  outEl.textContent = "Running request...";
+  const targetId = strict ? "failStrictOut" : "failNonStrictOut";
+  const el = document.getElementById(targetId);
+  el.textContent = "Executing failure test...";
 
   try {
     const res = await fetch("/demo/run", {
@@ -328,21 +371,21 @@ async function runFailureTest(strict) {
     });
 
     if (!res.ok) {
-      const errText = await res.text();
-      outEl.textContent = `HTTP ${res.status}: ${errText}`;
+      const errData = await res.json().catch(() => ({ detail: res.statusText }));
+      el.textContent = `HTTP ${res.status}: ${JSON.stringify(errData, null, 2)}`;
       return;
     }
 
     const data = await res.json();
-    outEl.textContent = JSON.stringify(data, null, 2);
+    el.textContent = JSON.stringify(data, null, 2);
   } catch (e) {
-    outEl.textContent = "Error: " + e.message;
+    el.textContent = `Error: ${e.message}`;
   }
 }
 
 async function loadBenchmark() {
   const box = document.getElementById("benchTableBox");
-  box.textContent = "Fetching benchmark metrics...";
+  box.textContent = "Fetching latest benchmark evaluation metrics...";
 
   try {
     const res = await fetch("/demo/benchmark");
@@ -357,50 +400,32 @@ async function loadBenchmark() {
       <table class="bench-table">
         <thead>
           <tr>
-            <th>Entity Type</th>
+            <th>Dataset</th>
+            <th>Sample Count</th>
             <th>Precision</th>
             <th>Recall</th>
             <th>F1 Score</th>
-            <th>True Positives (TP)</th>
-            <th>False Positives (FP)</th>
-            <th>False Negatives (FN)</th>
           </tr>
         </thead>
         <tbody>
     `;
 
-    Object.keys(data.metrics).forEach((type) => {
-      const m = data.metrics[type];
+    for (let ds in data.metrics) {
+      const m = data.metrics[ds];
       html += `
         <tr>
-          <td><strong>${type}</strong></td>
+          <td><strong>${ds.toUpperCase()}</strong></td>
+          <td>${m.total_samples || '—'}</td>
           <td>${(m.precision * 100).toFixed(2)}%</td>
           <td>${(m.recall * 100).toFixed(2)}%</td>
-          <td>${(m.f1 * 100).toFixed(2)}%</td>
-          <td>${m.tp}</td>
-          <td>${m.fp}</td>
-          <td>${m.fn}</td>
+          <td><strong>${(m.f1 * 100).toFixed(2)}%</strong></td>
         </tr>
       `;
-    });
+    }
 
-    const o = data.overall;
-    html += `
-        <tr style="background: var(--bg); font-weight: bold;">
-          <td>OVERALL SUMMARY</td>
-          <td>${(o.precision * 100).toFixed(2)}%</td>
-          <td>${(o.recall * 100).toFixed(2)}%</td>
-          <td>${(o.f1 * 100).toFixed(2)}%</td>
-          <td>${o.tp}</td>
-          <td>${o.fp}</td>
-          <td>${o.fn}</td>
-        </tr>
-      </tbody>
-    </table>
-    `;
-
+    html += `</tbody></table>`;
     box.innerHTML = html;
   } catch (e) {
-    box.textContent = "Failed to load benchmark: " + e.message;
+    box.textContent = `Failed to load benchmark: ${e.message}`;
   }
 }

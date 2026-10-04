@@ -32,16 +32,22 @@ def generate_valid_pan() -> str:
     return f"{letters}{fourth}{fifth}{digits}{last}"
 
 
+def generate_valid_mobile() -> str:
+    first_digit = str(random.randint(6, 9))
+    part1 = first_digit + "".join([str(random.randint(0, 9)) for _ in range(4)])
+    part2 = "".join([str(random.randint(0, 9)) for _ in range(5)])
+    return f"+91 {part1} {part2}"
+
+
 def generate_dataset():
     samples = []
-
     upi_handles = ["oksbi", "okaxis", "ybl", "paytm", "okicici"]
 
     # 1. Clean texts
     for _ in range(15):
         aadhaar = generate_valid_aadhaar()
         pan = generate_valid_pan()
-        mobile = f"+91 {random.randint(6,9)}{random.randint(10000,99999)} {random.randint(10000,99999)}"
+        mobile = generate_valid_mobile()
         upi = f"user{random.randint(100,999)}@{random.choice(upi_handles)}"
         ifsc = f"SBIN00{random.randint(10000,99999)}"
         email = fake_email()
@@ -79,7 +85,7 @@ def generate_dataset():
     for _ in range(15):
         aadhaar = generate_valid_aadhaar()
         pan = generate_valid_pan()
-        mobile = f"98765{random.randint(10000,99999)}"
+        mobile = generate_valid_mobile()
         upi = f"raj{random.randint(100,999)}@ybl"
         ifsc = f"HDFC00{random.randint(10000,99999)}"
         email = fake_email()

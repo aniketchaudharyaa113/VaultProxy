@@ -165,18 +165,35 @@ async def demo_run(payload: Dict[str, Any]):
         req_payload = {
             "model": "gpt-4",
             "messages": [{"role": "user", "content": text}],
-            "stream": False,
+            "stream": stream,
         }
         t0 = time.perf_counter()
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(url, json=req_payload)
             upstream_ms = (time.perf_counter() - t0) * 1000
-            resp_data = resp.json()
-            reply_text = (
-                resp_data.get("choices", [{}])[0]
-                .get("message", {})
-                .get("content", "")
-            )
+            if resp.status_code != 200:
+                raise HTTPException(status_code=resp.status_code, detail=f"Upstream error: {resp.text}")
+
+            if stream:
+                reply_text = ""
+                async for line in resp.aiter_lines():
+                    line = line.strip()
+                    if not line.startswith("data: ") or line == "data: [DONE]":
+                        continue
+                    try:
+                        cdata = json.loads(line[6:])
+                        delta = cdata.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                        if delta:
+                            reply_text += delta
+                    except Exception:
+                        pass
+            else:
+                resp_data = resp.json()
+                reply_text = (
+                    resp_data.get("choices", [{}])[0]
+                    .get("message", {})
+                    .get("content", "")
+                )
 
         return {
             "typed_text": text,
@@ -247,15 +264,37 @@ async def demo_run(payload: Dict[str, Any]):
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.post(url, json=upstream_payload)
         upstream_ms = (time.perf_counter() - t2) * 1000
-        resp_data = resp.json()
-        reply_raw = (
-            resp_data.get("choices", [{}])[0]
-            .get("message", {})
-            .get("content", "")
-        )
+        if resp.status_code != 200:
+            raise HTTPException(status_code=resp.status_code, detail=f"Upstream error: {resp.text}")
+
+        if stream:
+            reply_raw = ""
+            restorer = StreamRestorer(vault)
+            restored_chunks = []
+            async for line in resp.aiter_lines():
+                line = line.strip()
+                if not line.startswith("data: ") or line == "data: [DONE]":
+                    continue
+                try:
+                    cdata = json.loads(line[6:])
+                    delta = cdata.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                    if delta:
+                        reply_raw += delta
+                        restored_chunks.append(restorer.feed(delta))
+                except Exception:
+                    pass
+            restored_chunks.append(restorer.flush())
+            restored_reply = "".join(restored_chunks)
+        else:
+            resp_data = resp.json()
+            reply_raw = (
+                resp_data.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+            )
+            restored_reply = restore_text(reply_raw, vault)
 
     t3 = time.perf_counter()
-    restored_reply = restore_text(reply_raw, vault)
     restore_ms = (time.perf_counter() - t3) * 1000
 
     return {
