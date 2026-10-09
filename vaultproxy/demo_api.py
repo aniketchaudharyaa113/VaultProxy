@@ -125,17 +125,31 @@ async def demo_analyze(payload: dict[str, Any]) -> dict[str, Any]:
     for span in merged_spans:
         val = text[span.start : span.end]
         chk_valid = validate_verhoeff(val) if span.type == "AADHAAR" else True
+        src = span.source
+        if src.lower() == "rule":
+            src_formatted = "RULE"
+        elif src.lower() == "gemma":
+            src_formatted = "GEMMA"
+        elif src.lower().startswith("slm:"):
+            src_formatted = f"SLM:{src[4:]}"
+        elif src.lower() == "heuristic":
+            src_formatted = "HEURISTIC"
+        else:
+            src_formatted = src.upper()
+
         spans_out.append(
             {
                 "start": span.start,
                 "end": span.end,
                 "type": span.type,
-                "source": span.source,
+                "source": src_formatted,
                 "score": span.score,
                 "text": val,
                 "checksum_valid": chk_valid,
             }
         )
+
+    slm_status = "OK" if (gemma_used and not gemma_err) else "Not assessed"
 
     return {
         "spans": spans_out,
@@ -147,7 +161,8 @@ async def demo_analyze(payload: dict[str, Any]) -> dict[str, Any]:
         },
         "gemma": {
             "used": gemma_used,
-            "error": gemma_err,
+            "status": slm_status,
+            "error": gemma_err if not gemma_used else None,
         },
     }
 

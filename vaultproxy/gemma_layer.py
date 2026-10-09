@@ -72,7 +72,27 @@ circuit_breaker = CircuitBreaker(
     cooldown_seconds=settings.GEMMA_CIRCUIT_BREAKER_COOLDOWN_SECONDS,
 )
 
-_semaphore = asyncio.Semaphore(settings.GEMMA_CONCURRENCY_LIMIT)
+_semaphore_instance: asyncio.Semaphore | None = None
+_semaphore_loop: asyncio.AbstractEventLoop | None = None
+
+
+def get_semaphore() -> asyncio.Semaphore:
+    global _semaphore_instance, _semaphore_loop
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if _semaphore_instance is None or _semaphore_loop != loop:
+        _semaphore_instance = asyncio.Semaphore(settings.GEMMA_CONCURRENCY_LIMIT)
+        _semaphore_loop = loop
+    return _semaphore_instance
+
+
+def reset_semaphore() -> None:
+    global _semaphore_instance, _semaphore_loop
+    _semaphore_instance = None
+    _semaphore_loop = None
+
 
 LAST_SLM_MODEL_NAME: str = ""
 LAST_SLM_LATENCY_MS: float = 0.0
@@ -163,7 +183,6 @@ def parse_gemma_json(
                 )
             start_idx = idx + len(needle)
 
-    # Valid parse if JSON parsed into valid structure (even if items_list is empty, e.g. no entities found)
     return spans, True
 
 
@@ -213,7 +232,7 @@ def _heuristic_gemma_fallback(text: str) -> list[Span]:
 
 
 async def run_gemma_detection(text: str) -> tuple[list[Span], bool, bool]:
-    """Run Gemma model detection on text with circuit breaker and concurrency controls.
+    """Run Gemma model detection on text with queue timeout, circuit breaker and concurrency controls.
 
     Returns:
         (spans, degraded, gemma_used)
@@ -235,122 +254,146 @@ async def run_gemma_detection(text: str) -> tuple[list[Span], bool, bool]:
             return fb_spans, True, False
         return [], True, False
 
+    sem = get_semaphore()
+    sem_acquired = False
+
+    # Queue timeout: GEMMA_TIMEOUT_SECONDS does NOT include time spent waiting in concurrency queue
+    try:
+        await asyncio.wait_for(
+            sem.acquire(), timeout=settings.GEMMA_QUEUE_TIMEOUT_SECONDS
+        )
+        sem_acquired = True
+    except (asyncio.TimeoutError, TimeoutError) as te:
+        logger.warning("Gemma concurrency queue timeout exceeded.")
+        circuit_breaker.record_failure()
+        if settings.STRICT_MODE:
+            raise GemmaLayerError(
+                "VaultProxy fail-closed: Gemma queue timeout waiting for concurrency slot."
+            ) from te
+        if backend == "auto":
+            fb_spans = _heuristic_gemma_fallback(text)
+            return fb_spans, True, False
+        return [], True, False
+
     prompt = GEMMA_PROMPT_TEMPLATE.format(text=text)
     t0 = time.perf_counter()
 
-    async with _semaphore:
-        try:
-            async with httpx.AsyncClient(
-                timeout=settings.GEMMA_TIMEOUT_SECONDS
-            ) as client:
-                if backend in ("ollama", "auto"):
-                    url = f"{settings.OLLAMA_URL.rstrip('/')}/api/chat"
-                    model_to_use = settings.GEMMA_MODEL
+    try:
+        async with httpx.AsyncClient(
+            timeout=settings.GEMMA_TIMEOUT_SECONDS
+        ) as client:
+            if backend in ("ollama", "auto"):
+                url = f"{settings.OLLAMA_URL.rstrip('/')}/api/chat"
+                model_to_use = settings.GEMMA_MODEL
 
-                    # H1: Opt-in auto-discovery only if GEMMA_AUTODISCOVER is True
-                    if settings.GEMMA_AUTODISCOVER:
-                        try:
-                            tags_resp = await client.get(
-                                f"{settings.OLLAMA_URL.rstrip('/')}/api/tags",
-                                timeout=2.0,
+                tags_resp = await client.get(
+                    f"{settings.OLLAMA_URL.rstrip('/')}/api/tags",
+                    timeout=2.0,
+                )
+                if tags_resp.status_code == 200:
+                    models = tags_resp.json().get("models", [])
+                    model_names = [m.get("name", "") for m in models]
+
+                    # Check if requested model is installed
+                    model_present = any(settings.GEMMA_MODEL in name for name in model_names)
+                    if not model_present:
+                        if settings.GEMMA_AUTODISCOVER and model_names:
+                            model_to_use = model_names[0]
+                        else:
+                            raise ValueError(
+                                f"Configured model '{settings.GEMMA_MODEL}' is not installed in Ollama."
                             )
-                            if tags_resp.status_code == 200:
-                                models = tags_resp.json().get("models", [])
-                                model_names = [m.get("name", "") for m in models]
-                                if model_names and not any(
-                                    settings.GEMMA_MODEL in name for name in model_names
-                                ):
-                                    model_to_use = model_names[0]
-                        except Exception:
-                            pass
 
-                    payload: dict[str, Any] = {
-                        "model": model_to_use,
-                        "messages": [{"role": "user", "content": prompt}],
-                        "stream": False,
-                        "format": GemmaResponseSchema.model_json_schema(),
-                        "options": {
-                            "temperature": settings.GEMMA_TEMPERATURE,
-                            "num_predict": settings.GEMMA_MAX_TOKENS,
-                        },
-                        "keep_alive": settings.GEMMA_KEEP_ALIVE,
-                    }
-                    resp = await client.post(url, json=payload)
-                    if resp.status_code != 200:
-                        raise ValueError(f"Ollama returned HTTP status {resp.status_code}")
+                payload: dict[str, Any] = {
+                    "model": model_to_use,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "stream": False,
+                    "format": GemmaResponseSchema.model_json_schema(),
+                    "options": {
+                        "temperature": settings.GEMMA_TEMPERATURE,
+                        "num_predict": settings.GEMMA_MAX_TOKENS,
+                    },
+                    "keep_alive": settings.GEMMA_KEEP_ALIVE,
+                }
+                resp = await client.post(url, json=payload)
+                if resp.status_code != 200:
+                    raise ValueError(f"Ollama returned HTTP status {resp.status_code}")
 
-                    res_data = resp.json()
-                    raw_json = res_data.get("message", {}).get("content", "")
+                res_data = resp.json()
+                raw_json = res_data.get("message", {}).get("content", "")
 
-                    src_label = get_source_label(model_to_use)
-                    spans, valid_parse = parse_gemma_json(raw_json, text, source_label=src_label)
+                src_label = get_source_label(model_to_use)
+                spans, valid_parse = parse_gemma_json(raw_json, text, source_label=src_label)
 
-                    if not valid_parse:
-                        raise ValueError("Unparseable or schema-violating JSON from SLM.")
+                if not valid_parse:
+                    raise ValueError("Unparseable or schema-violating JSON from SLM.")
 
-                    LAST_SLM_MODEL_NAME = model_to_use
-                    LAST_SLM_LATENCY_MS = (time.perf_counter() - t0) * 1000
-                    circuit_breaker.record_success()
-                    return spans, False, True
+                LAST_SLM_MODEL_NAME = model_to_use
+                LAST_SLM_LATENCY_MS = (time.perf_counter() - t0) * 1000
+                circuit_breaker.record_success()
+                return spans, False, True
 
-                elif backend == "gemini":
-                    model_to_use = settings.GEMMA_MODEL
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_to_use}:generateContent?key={settings.GEMINI_API_KEY}"
-                    payload = {
-                        "contents": [{"parts": [{"text": prompt}]}],
-                        "generationConfig": {
-                            "temperature": settings.GEMMA_TEMPERATURE,
-                            "maxOutputTokens": settings.GEMMA_MAX_TOKENS,
-                            "responseMimeType": "application/json",
-                        },
-                    }
-                    resp = await client.post(url, json=payload)
-                    resp.raise_for_status()
-                    res_data = resp.json()
-                    raw_json = (
-                        res_data.get("candidates", [{}])[0]
-                        .get("content", {})
-                        .get("parts", [{}])[0]
-                        .get("text", "")
-                    )
-                    src_label = get_source_label(model_to_use)
-                    spans, valid_parse = parse_gemma_json(raw_json, text, source_label=src_label)
+            elif backend == "gemini":
+                model_to_use = settings.GEMMA_MODEL
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_to_use}:generateContent?key={settings.GEMINI_API_KEY}"
+                payload = {
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {
+                        "temperature": settings.GEMMA_TEMPERATURE,
+                        "maxOutputTokens": settings.GEMMA_MAX_TOKENS,
+                        "responseMimeType": "application/json",
+                    },
+                }
+                resp = await client.post(url, json=payload)
+                resp.raise_for_status()
+                res_data = resp.json()
+                raw_json = (
+                    res_data.get("candidates", [{}])[0]
+                    .get("content", {})
+                    .get("parts", [{}])[0]
+                    .get("text", "")
+                )
+                src_label = get_source_label(model_to_use)
+                spans, valid_parse = parse_gemma_json(raw_json, text, source_label=src_label)
 
-                    if not valid_parse:
-                        raise ValueError("Unparseable or schema-violating JSON from Gemini SLM.")
+                if not valid_parse:
+                    raise ValueError("Unparseable or schema-violating JSON from Gemini SLM.")
 
-                    LAST_SLM_MODEL_NAME = model_to_use
-                    LAST_SLM_LATENCY_MS = (time.perf_counter() - t0) * 1000
-                    circuit_breaker.record_success()
-                    return spans, False, True
+                LAST_SLM_MODEL_NAME = model_to_use
+                LAST_SLM_LATENCY_MS = (time.perf_counter() - t0) * 1000
+                circuit_breaker.record_success()
+                return spans, False, True
 
-                raise ValueError(f"Unsupported backend {backend}")
+            raise ValueError(f"Unsupported backend {backend}")
 
-        except Exception as e:
-            logger.warning(f"Gemma layer error ({type(e).__name__}): {e}")
-            circuit_breaker.record_failure()
+    except Exception as e:
+        logger.warning(f"Gemma layer error ({type(e).__name__}): {e}")
+        circuit_breaker.record_failure()
 
-            # H2, H5: In STRICT_MODE=True, error or unparseable output must raise GemmaLayerError (503 fail-closed)
-            if settings.STRICT_MODE:
-                raise GemmaLayerError(f"Gemma layer failed in STRICT_MODE: {e}") from e
+        if settings.STRICT_MODE:
+            raise GemmaLayerError(f"Gemma layer failed in STRICT_MODE: {e}") from e
 
-            # H2, H5, H6: In non-strict mode, if auto, try fallback with degraded=True, gemma_used=False
-            if backend == "auto":
-                fb_spans = _heuristic_gemma_fallback(text)
-                return fb_spans, True, False
+        if backend == "auto":
+            fb_spans = _heuristic_gemma_fallback(text)
+            return fb_spans, True, False
 
-            # H5, H6: Non-strict non-auto mode returns empty spans, degraded=True, gemma_used=False
-            return [], True, False
+        return [], True, False
+    finally:
+        if sem_acquired:
+            sem.release()
 
 
 async def startup_self_test() -> tuple[bool, str, float]:
-    """Startup self-test that makes one tiny call and records exact model name & latency."""
+    """Startup self-test that checks config, verifies model presence, makes one tiny call, and records exact model name & latency.
+
+    If configured model is missing (and GEMMA_AUTODISCOVER=False), logs warning and returns (False, GEMMA_MODEL, 0.0).
+    """
     if settings.GEMMA_BACKEND.lower() == "off":
         return True, "off", 0.0
 
     try:
-        spans, degraded, gemma_used = await run_gemma_detection("warmup test")
+        spans, degraded, gemma_used = await run_gemma_detection("test warmup")
         return not degraded, LAST_SLM_MODEL_NAME or settings.GEMMA_MODEL, LAST_SLM_LATENCY_MS
     except Exception as e:
-        logger.warning(f"Startup self-test failed: {e}")
+        logger.warning(f"Startup self-test failed for model '{settings.GEMMA_MODEL}': {e}")
         return False, settings.GEMMA_MODEL, 0.0

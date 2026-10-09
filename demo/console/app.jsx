@@ -323,13 +323,17 @@ function App() {
     spans.forEach((span, i) => {
       elements.push(inputPrompt.substring(lastIdx, span.start));
       const entityText = inputPrompt.substring(span.start, span.end);
-      const isRule = span.source === "rule";
+      const srcUpper = (span.source || "").toUpperCase();
+      let srcClass = "src-slm";
+      if (srcUpper === "RULE") srcClass = "src-rule";
+      else if (srcUpper === "GEMMA") srcClass = "src-gemma";
+      else if (srcUpper === "HEURISTIC") srcClass = "src-heuristic";
       const tagClass = `tag-${span.type}`;
 
       elements.push(
         <span key={i} className={`span-tag ${tagClass}`} title={`Score: ${span.score} | Source: ${span.source}`}>
           {entityText}
-          <span className={`src-badge ${isRule ? "src-rule" : "src-gemma"}`}>{span.source.toUpperCase()}</span>
+          <span className={`src-badge ${srcClass}`}>{span.source}</span>
           {span.type === "AADHAAR" && (
             <span className="verhoeff-tag">{span.checksum_valid ? "✓ Verhoeff" : "✕ Invalid"}</span>
           )}

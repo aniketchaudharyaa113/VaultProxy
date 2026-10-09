@@ -28,6 +28,15 @@ from vaultproxy.gemma_layer import (
 )
 
 
+@pytest.fixture(autouse=True)
+def reset_circuit_breaker():
+    circuit_breaker.state = "CLOSED"
+    circuit_breaker.failure_count = 0
+    yield
+    circuit_breaker.state = "CLOSED"
+    circuit_breaker.failure_count = 0
+
+
 def test_source_label_gemma_vs_slm():
     """Test get_source_label returns 'gemma' for gemma models and 'slm:<model>' otherwise."""
     assert get_source_label("gemma4:e2b") == "gemma"
@@ -50,17 +59,21 @@ def test_h1_exact_model_calling_non_gemma_source_label():
         async def mock_post(*args, **kwargs):
             return httpx.Response(200, json=mock_response)
 
+        async def mock_get(*args, **kwargs):
+            return httpx.Response(200, json={"models": [{"name": "llama3:8b"}]})
+
         with patch.object(settings, "GEMMA_BACKEND", "ollama"):
             with patch.object(settings, "GEMMA_MODEL", "llama3:8b"):
                 with patch.object(settings, "GEMMA_AUTODISCOVER", False):
                     with patch("httpx.AsyncClient.post", side_effect=mock_post):
-                        text = "Rajesh Kumar is here."
-                        spans, degraded, gemma_used = await run_gemma_detection(text)
+                        with patch("httpx.AsyncClient.get", side_effect=mock_get):
+                            text = "Rajesh Kumar is here."
+                            spans, degraded, gemma_used = await run_gemma_detection(text)
 
-                        assert len(spans) == 1
-                        assert spans[0].source == "slm:llama3:8b"
-                        assert degraded is False
-                        assert gemma_used is True
+                            assert len(spans) == 1
+                            assert spans[0].source == "slm:llama3:8b"
+                            assert degraded is False
+                            assert gemma_used is True
     asyncio.run(_run())
 
 

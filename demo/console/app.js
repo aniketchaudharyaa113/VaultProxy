@@ -149,8 +149,12 @@ function renderSpans(text, spans) {
   spans.forEach((span) => {
     html += escapeHtml(text.substring(lastIdx, span.start));
     const entityText = escapeHtml(text.substring(span.start, span.end));
-    const srcClass = span.source === "rule" ? "src-rule" : "src-gemma";
-    const srcLabel = span.source === "rule" ? "RULE" : "GEMMA";
+    const srcUpper = (span.source || "").toUpperCase();
+    let srcClass = "src-slm";
+    if (srcUpper === "RULE") srcClass = "src-rule";
+    else if (srcUpper === "GEMMA") srcClass = "src-gemma";
+    else if (srcUpper === "HEURISTIC") srcClass = "src-heuristic";
+    const srcLabel = span.source;
     const tagClass = `tag-${span.type}`;
     const chkText = span.type === "AADHAAR" ? ` (Verhoeff: ${span.checksum_valid ? 'Valid' : 'Invalid'})` : "";
 

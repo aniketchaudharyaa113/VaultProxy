@@ -533,6 +533,8 @@ textarea:focus {
 
 .src-rule { background: rgba(255, 255, 255, 0.2); color: white; }
 .src-gemma { background: var(--accent-purple); color: white; }
+.src-slm { background: rgba(14, 165, 233, 0.4); color: white; }
+.src-heuristic { background: rgba(245, 158, 11, 0.4); color: white; }
 
 .verhoeff-tag {
   font-size: 10px;
