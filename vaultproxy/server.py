@@ -42,8 +42,26 @@ HOP_BY_HOP_HEADERS = {
 
 
 @app.get("/health")
+@app.get("/healthz")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/readyz")
+async def readyz() -> dict[str, Any]:
+    from vaultproxy.gemma_layer import (
+        LAST_SLM_LATENCY_MS,
+        LAST_SLM_MODEL_NAME,
+        circuit_breaker,
+    )
+    return {
+        "status": "ready" if circuit_breaker.state != "OPEN" else "degraded",
+        "slm_backend": settings.GEMMA_BACKEND,
+        "slm_model": LAST_SLM_MODEL_NAME or settings.GEMMA_MODEL,
+        "slm_latency_ms": LAST_SLM_LATENCY_MS,
+        "circuit_breaker": circuit_breaker.state,
+        "strict_mode": settings.STRICT_MODE,
+    }
 
 
 @app.get("/favicon.ico")

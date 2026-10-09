@@ -18,6 +18,7 @@ Covers:
 
 import json
 from unittest.mock import AsyncMock, patch
+
 import httpx
 import pytest
 from fastapi.testclient import TestClient
@@ -272,7 +273,8 @@ def test_e2e_non_strict_degraded_path(client):
                     assert response.status_code == 200
                     report = json.loads(response.headers["x-vault-report"])
                     assert report["degraded"] is True
-                    assert report["gemma_used"] is True
+                    # Applied H6: gemma_used is False when SLM call fails
+                    assert report["gemma_used"] is False
 
 
 def test_e2e_invalid_json_body(client):

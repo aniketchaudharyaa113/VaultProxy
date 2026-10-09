@@ -45,7 +45,7 @@ def test_gemma_parse_verbatim_only():
         ]
     )
 
-    spans = parse_gemma_json(raw_gemma_json, text)
+    spans, _valid = parse_gemma_json(raw_gemma_json, text)
     assert len(spans) == 2
     assert spans[0].type == "PERSON"
     assert text[spans[0].start : spans[0].end] == "Ramesh Kumar"
@@ -64,6 +64,7 @@ def test_gemma_timeout_strict_mode_true():
 
 
 def test_gemma_timeout_strict_mode_false():
+    """Updated for H6: gemma_used is False when SLM times out/fails."""
     with patch.object(settings, "GEMMA_BACKEND", "ollama"):
         with patch.object(settings, "STRICT_MODE", False):
             with patch(
@@ -74,4 +75,4 @@ def test_gemma_timeout_strict_mode_false():
                 )
                 assert spans == []
                 assert degraded is True
-                assert gemma_used is True
+                assert gemma_used is False
