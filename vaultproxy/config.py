@@ -23,7 +23,51 @@ class Settings(BaseSettings):
     STRICT_MODE: bool = False
     DEMO_MODE: bool = False
 
+    PROFILE: str = "development"
+    MASK_SCOPE: str = ""
+    NON_TEXT_POLICY: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @field_validator("PROFILE")
+    @classmethod
+    def validate_profile(cls, v: str) -> str:
+        v_lower = v.lower()
+        if v_lower not in {"development", "production"}:
+            raise ValueError("PROFILE must be 'development' or 'production'")
+        return v_lower
+
+    @field_validator("MASK_SCOPE")
+    @classmethod
+    def validate_mask_scope(cls, v: str) -> str:
+        if not v:
+            return ""
+        v_lower = v.lower()
+        if v_lower not in {"messages", "deep"}:
+            raise ValueError("MASK_SCOPE must be 'messages' or 'deep'")
+        return v_lower
+
+    @field_validator("NON_TEXT_POLICY")
+    @classmethod
+    def validate_non_text_policy(cls, v: str) -> str:
+        if not v:
+            return ""
+        v_lower = v.lower()
+        if v_lower not in {"allow", "block"}:
+            raise ValueError("NON_TEXT_POLICY must be 'allow' or 'block'")
+        return v_lower
+
+    @property
+    def effective_mask_scope(self) -> str:
+        if self.MASK_SCOPE:
+            return self.MASK_SCOPE.lower()
+        return "deep" if self.PROFILE.lower() == "production" else "messages"
+
+    @property
+    def effective_non_text_policy(self) -> str:
+        if self.NON_TEXT_POLICY:
+            return self.NON_TEXT_POLICY.lower()
+        return "block" if self.PROFILE.lower() == "production" else "allow"
 
     @field_validator("GEMMA_BACKEND")
     @classmethod
@@ -45,3 +89,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+

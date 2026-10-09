@@ -345,9 +345,9 @@ def test_e2e_upstream_timeout(client):
 
 
 def test_e2e_tool_calls_and_image_url_unmasked_leak(client):
-    """KNOWN LEAK, changes in Phase 2:
-    Assistant tool_calls arguments and image_url multimodal parts currently pass through unmasked.
-    This test freezes current behaviour until Phase 2 deep-walk masking and non-text policy are added.
+    """Updated in Phase 2:
+    Assistant tool_calls arguments are now masked under deep masking.
+    Non-text parts (image_url) in development profile trigger an X-Vault-Warning header.
     """
     mock_resp = httpx.Response(
         200,
@@ -355,7 +355,7 @@ def test_e2e_tool_calls_and_image_url_unmasked_leak(client):
         content=json.dumps({"choices": []}).encode("utf-8"),
     )
 
-    with patch.object(settings, "GEMMA_BACKEND", "off"):
+    with patch.object(settings, "GEMMA_BACKEND", "off"), patch.object(settings, "MASK_SCOPE", "deep"):
         with patch("httpx.AsyncClient.send", new_callable=AsyncMock) as mock_send:
             mock_send.return_value = mock_resp
 
@@ -392,6 +392,7 @@ def test_e2e_tool_calls_and_image_url_unmasked_leak(client):
 
             response = client.post("/v1/chat/completions", json=payload)
             assert response.status_code == 200
+            assert response.headers.get("x-vault-warning") == "Uninspected non-text content present"
 
             sent_req = mock_send.call_args[0][0]
             sent_body = json.loads(sent_req.content.decode("utf-8"))
@@ -399,7 +400,7 @@ def test_e2e_tool_calls_and_image_url_unmasked_leak(client):
             asst_msg = sent_body["messages"][1]
             assert (
                 asst_msg["tool_calls"][0]["function"]["arguments"]
-                == '{"pan": "ABCPB1234F"}'
+                == '{"pan": "[PAN_1]"}'
             )
 
             user_msg = sent_body["messages"][2]
@@ -408,6 +409,7 @@ def test_e2e_tool_calls_and_image_url_unmasked_leak(client):
                 user_msg["content"][1]["image_url"]["url"]
                 == "https://example.com/id_card.png"
             )
+
 
 
 def test_e2e_demo_page_route(client):
