@@ -1,8 +1,7 @@
-from typing import List
 from vaultproxy.detectors import Span
 
 
-def merge_spans(spans: List[Span]) -> List[Span]:
+def merge_spans(spans: list[Span]) -> list[Span]:
     """Merge overlapping spans.
 
     Priority rules:
@@ -14,13 +13,13 @@ def merge_spans(spans: List[Span]) -> List[Span]:
         return []
 
     # Sort spans by priority
-    def sort_key(s: Span):
+    def sort_key(s: Span) -> tuple[int, int, int, float]:
         source_priority = 1 if s.source == "rule" else 0
         length = s.end - s.start
         return (s.start, -source_priority, -length, -s.score)
 
     sorted_spans = sorted(spans, key=sort_key)
-    result: List[Span] = []
+    result: list[Span] = []
 
     for curr in sorted_spans:
         overlap = False

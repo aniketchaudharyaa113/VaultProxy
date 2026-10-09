@@ -1,18 +1,19 @@
-import os
 import json
 import logging
-from typing import Dict, Any
+import os
+from typing import Any
+
 import httpx
-from fastapi import FastAPI, Request, Response, HTTPException
-from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse
+from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from vaultproxy.config import settings
-from vaultproxy.vault import RequestVault
-from vaultproxy.restore import restore_text, StreamRestorer
-from vaultproxy.report import create_vault_report_header
-from vaultproxy.gemma_layer import GemmaLayerError
 from vaultproxy.demo_api import router as demo_router
+from vaultproxy.gemma_layer import GemmaLayerError
+from vaultproxy.report import create_vault_report_header
+from vaultproxy.restore import StreamRestorer, restore_text
+from vaultproxy.vault import RequestVault
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("vaultproxy")
@@ -24,7 +25,7 @@ app.include_router(demo_router)
 if os.path.exists("demo/console"):
     app.mount("/demo/console", StaticFiles(directory="demo/console", html=True), name="console_static")
 
-LAST_MASKED_REQUEST: Dict[str, Any] = {}
+LAST_MASKED_REQUEST: dict[str, Any] = {}
 
 HOP_BY_HOP_HEADERS = {
     "host",
@@ -41,37 +42,39 @@ HOP_BY_HOP_HEADERS = {
 
 
 @app.get("/health")
-async def health():
+async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
 @app.get("/favicon.ico")
-async def favicon():
+async def favicon() -> Response:
     return Response(status_code=204)
 
 
 @app.get("/demo/last")
-async def demo_last():
+async def demo_last() -> dict[str, Any]:
     if not settings.DEMO_MODE:
         raise HTTPException(status_code=404, detail="Demo mode disabled.")
     return LAST_MASKED_REQUEST
 
 
 @app.get("/demo", response_class=HTMLResponse)
-async def demo_page():
+async def demo_page() -> Response:
     if not settings.DEMO_MODE:
         raise HTTPException(status_code=404, detail="Demo mode disabled.")
     try:
         if os.path.exists("demo/console/index.html"):
-            with open("demo/console/index.html", "r", encoding="utf-8") as f:
-                return f.read()
-        with open("demo/index.html", "r", encoding="utf-8") as f:
-            return f.read()
+            with open("demo/console/index.html", encoding="utf-8") as f:
+                return HTMLResponse(content=f.read())
+        with open("demo/index.html", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="demo/console/index.html not found.")
+        raise HTTPException(
+            status_code=404, detail="demo/console/index.html not found."
+        )
 
 
-def clean_headers(request_headers: Request.headers) -> Dict[str, str]:
+def clean_headers(request_headers: Any) -> dict[str, str]:
     headers = {}
     for key, value in request_headers.items():
         if key.lower() not in HOP_BY_HOP_HEADERS:
@@ -82,7 +85,7 @@ def clean_headers(request_headers: Request.headers) -> Dict[str, str]:
 
 
 @app.post("/v1/chat/completions")
-async def chat_completions(request: Request):
+async def chat_completions(request: Request) -> Response:
     global LAST_MASKED_REQUEST
     vault = RequestVault()
 
@@ -146,7 +149,7 @@ async def chat_completions(request: Request):
             "text/event-stream"
         ):
 
-            async def stream_wrapper():
+            async def stream_wrapper() -> Any:
                 restorer = StreamRestorer(vault)
                 line_buffer = ""
 

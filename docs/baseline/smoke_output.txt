@@ -1,0 +1,10 @@
+=== VaultProxy Smoke Test ===
+Waiting for servers to start...
+Sending request through proxy...
+Response Body: {"id": "chatcmpl-mock123", "object": "chat.completion", "created": 1700000000, "model": "gpt-4", "choices": [{"index": 0, "message": {"role": "assistant", "content": "My Aadhaar is 367598341203 and PAN is ABCPB1234F."}, "finish_reason": "stop"}]}
+PASS: X-Vault-Report header present.
+PASS: Client response received restored values.
+Upstream Request Seen: {"model":"gpt-4","messages":[{"role":"system","content":"IMPORTANT: Keep all token placeholders formatted like [TYPE_N] (e.g. [PAN_1], [AADHAAR_1]) EXACTLY as they are in your response. Do not modify, translate, or remove them."},{"role":"user","content":"My Aadhaar is [AADHAAR_1] and PAN is [PAN_1]."}],"stream":false}
+PASS: Upstream received tokens only, zero raw PII leaked.
+=== Smoke Test PASSED Successfully! ===
+Cleaning up processes...

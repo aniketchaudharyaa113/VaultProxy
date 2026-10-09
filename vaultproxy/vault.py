@@ -1,4 +1,5 @@
-from typing import Dict, List, Any, Tuple
+from typing import Any
+
 from vaultproxy.detectors import Span
 from vaultproxy.detectors.registry import run_rule_detectors
 from vaultproxy.gemma_layer import run_gemma_detection
@@ -8,10 +9,10 @@ from vaultproxy.merge import merge_spans
 class RequestVault:
     """Per-request vault mapping raw values to typed tokens (and vice versa)."""
 
-    def __init__(self):
-        self.value_to_token: Dict[str, str] = {}
-        self.token_to_value: Dict[str, str] = {}
-        self.type_counts: Dict[str, int] = {}
+    def __init__(self) -> None:
+        self.value_to_token: dict[str, str] = {}
+        self.token_to_value: dict[str, str] = {}
+        self.type_counts: dict[str, int] = {}
 
     def get_or_create_token(self, value: str, entity_type: str) -> str:
         if value in self.value_to_token:
@@ -25,7 +26,7 @@ class RequestVault:
         self.token_to_value[token] = value
         return token
 
-    def mask_text(self, text: str, spans: List[Span]) -> str:
+    def mask_text(self, text: str, spans: list[Span]) -> str:
         if not text or not spans:
             return text
 
@@ -38,14 +39,14 @@ class RequestVault:
         return res
 
     async def mask_messages(
-        self, messages: List[Dict[str, Any]]
-    ) -> Tuple[List[Dict[str, Any]], bool, bool]:
+        self, messages: list[dict[str, Any]]
+    ) -> tuple[list[dict[str, Any]], bool, bool]:
         system_msg = {
             "role": "system",
             "content": "IMPORTANT: Keep all token placeholders formatted like [TYPE_N] (e.g. [PAN_1], [AADHAAR_1]) EXACTLY as they are in your response. Do not modify, translate, or remove them.",
         }
 
-        masked_msgs: List[Dict[str, Any]] = [system_msg]
+        masked_msgs: list[dict[str, Any]] = [system_msg]
         any_degraded = False
         any_gemma_used = False
 

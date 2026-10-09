@@ -1,19 +1,20 @@
-import os
 import json
+import os
 import time
+from typing import Any
 from urllib.parse import urlparse
-from typing import Dict, Any, List, Optional
+
 import httpx
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 
 from vaultproxy.config import settings
 from vaultproxy.detectors.registry import run_rule_detectors
 from vaultproxy.detectors.verhoeff import validate_verhoeff
-from vaultproxy.gemma_layer import run_gemma_detection, GemmaLayerError
+from vaultproxy.gemma_layer import GemmaLayerError, run_gemma_detection
 from vaultproxy.merge import merge_spans
+from vaultproxy.restore import StreamRestorer, restore_text
 from vaultproxy.vault import RequestVault
-from vaultproxy.restore import restore_text, StreamRestorer
 
 router = APIRouter(prefix="/demo", tags=["demo"])
 
@@ -25,7 +26,7 @@ def is_simulated_gemma_down() -> bool:
 
 
 @router.get("/status")
-async def demo_status():
+async def demo_status() -> dict[str, Any]:
     if not settings.DEMO_MODE:
         raise HTTPException(status_code=404, detail="Demo mode disabled.")
 
@@ -65,7 +66,7 @@ async def demo_status():
 
 
 @router.post("/simulate")
-async def demo_simulate(payload: Dict[str, Any]):
+async def demo_simulate(payload: dict[str, Any]) -> dict[str, Any]:
     if not settings.DEMO_MODE:
         raise HTTPException(status_code=404, detail="Demo mode disabled.")
 
@@ -82,7 +83,7 @@ async def demo_simulate(payload: Dict[str, Any]):
 
 
 @router.post("/analyze")
-async def demo_analyze(payload: Dict[str, Any]):
+async def demo_analyze(payload: dict[str, Any]) -> dict[str, Any]:
     if not settings.DEMO_MODE:
         raise HTTPException(status_code=404, detail="Demo mode disabled.")
 
@@ -96,7 +97,7 @@ async def demo_analyze(payload: Dict[str, Any]):
 
     # 2. Gemma detection
     t1 = time.perf_counter()
-    gemma_spans = []
+    gemma_spans: list[Any] = []
     gemma_used = False
     gemma_err = None
 
@@ -152,7 +153,7 @@ async def demo_analyze(payload: Dict[str, Any]):
 
 
 @router.post("/run")
-async def demo_run(payload: Dict[str, Any]):
+async def demo_run(payload: dict[str, Any]) -> dict[str, Any]:
     if not settings.DEMO_MODE:
         raise HTTPException(status_code=404, detail="Demo mode disabled.")
 
@@ -222,7 +223,7 @@ async def demo_run(payload: Dict[str, Any]):
 
     # Gemma detection timing
     t1 = time.perf_counter()
-    gemma_spans = []
+    gemma_spans: list[Any] = []
     degraded = False
     gemma_used = False
 
@@ -320,7 +321,7 @@ async def demo_run(payload: Dict[str, Any]):
 
 
 @router.post("/stream-trace")
-async def demo_stream_trace(payload: Dict[str, Any]):
+async def demo_stream_trace(payload: dict[str, Any]) -> StreamingResponse:
     if not settings.DEMO_MODE:
         raise HTTPException(status_code=404, detail="Demo mode disabled.")
 
@@ -329,10 +330,10 @@ async def demo_stream_trace(payload: Dict[str, Any]):
     spans = merge_spans(run_rule_detectors(text))
     masked_text = vault.mask_text(text, spans)
 
-    async def event_generator():
+    async def event_generator() -> Any:
         trace_events = []
 
-        def trace_cb(upstream_chunk: str, held_buffer: str, emitted: str):
+        def trace_cb(upstream_chunk: str, held_buffer: str, emitted: str) -> None:
             trace_events.append(
                 {
                     "upstream_chunk": upstream_chunk,
@@ -363,13 +364,14 @@ async def demo_stream_trace(payload: Dict[str, Any]):
 
 
 @router.get("/benchmark")
-async def demo_benchmark():
+async def demo_benchmark() -> dict[str, Any]:
     if not settings.DEMO_MODE:
         raise HTTPException(status_code=404, detail="Demo mode disabled.")
 
     res_path = "bench/results.json"
     if os.path.exists(res_path):
-        with open(res_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+        with open(res_path, encoding="utf-8") as f:
+            res_dict: dict[str, Any] = json.load(f)
+            return res_dict
 
     return {"error": "Benchmark results not found. Run benchmark script first."}
