@@ -2,9 +2,7 @@ import re
 
 from vaultproxy.detectors import Span
 
-UPI_HANDLES = (
-    r"okaxis|oksbi|okhdfcbank|okicici|ybl|paytm|ibl|axl"
-)
+UPI_HANDLES = r"okaxis|oksbi|okhdfcbank|okicici|ybl|paytm|ibl|axl"
 UPI_REGEX = re.compile(
     rf"\b[a-zA-Z0-9._-]+@({UPI_HANDLES})\b",
     re.IGNORECASE,

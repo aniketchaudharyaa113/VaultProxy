@@ -40,7 +40,9 @@ Input text: {text}
 class CircuitBreaker:
     """Circuit breaker for SLM layer calls."""
 
-    def __init__(self, failure_threshold: int = 3, cooldown_seconds: float = 30.0) -> None:
+    def __init__(
+        self, failure_threshold: int = 3, cooldown_seconds: float = 30.0
+    ) -> None:
         self.failure_threshold = failure_threshold
         self.cooldown_seconds = cooldown_seconds
         self.state = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
@@ -279,9 +281,7 @@ async def run_gemma_detection(text: str) -> tuple[list[Span], bool, bool]:
     t0 = time.perf_counter()
 
     try:
-        async with httpx.AsyncClient(
-            timeout=settings.GEMMA_TIMEOUT_SECONDS
-        ) as client:
+        async with httpx.AsyncClient(timeout=settings.GEMMA_TIMEOUT_SECONDS) as client:
             if backend in ("ollama", "auto"):
                 url = f"{settings.OLLAMA_URL.rstrip('/')}/api/chat"
                 model_to_use = settings.GEMMA_MODEL
@@ -295,7 +295,9 @@ async def run_gemma_detection(text: str) -> tuple[list[Span], bool, bool]:
                     model_names = [m.get("name", "") for m in models]
 
                     # Check if requested model is installed
-                    model_present = any(settings.GEMMA_MODEL in name for name in model_names)
+                    model_present = any(
+                        settings.GEMMA_MODEL in name for name in model_names
+                    )
                     if not model_present:
                         if settings.GEMMA_AUTODISCOVER and model_names:
                             model_to_use = model_names[0]
@@ -323,7 +325,9 @@ async def run_gemma_detection(text: str) -> tuple[list[Span], bool, bool]:
                 raw_json = res_data.get("message", {}).get("content", "")
 
                 src_label = get_source_label(model_to_use)
-                spans, valid_parse = parse_gemma_json(raw_json, text, source_label=src_label)
+                spans, valid_parse = parse_gemma_json(
+                    raw_json, text, source_label=src_label
+                )
 
                 if not valid_parse:
                     raise ValueError("Unparseable or schema-violating JSON from SLM.")
@@ -354,10 +358,14 @@ async def run_gemma_detection(text: str) -> tuple[list[Span], bool, bool]:
                     .get("text", "")
                 )
                 src_label = get_source_label(model_to_use)
-                spans, valid_parse = parse_gemma_json(raw_json, text, source_label=src_label)
+                spans, valid_parse = parse_gemma_json(
+                    raw_json, text, source_label=src_label
+                )
 
                 if not valid_parse:
-                    raise ValueError("Unparseable or schema-violating JSON from Gemini SLM.")
+                    raise ValueError(
+                        "Unparseable or schema-violating JSON from Gemini SLM."
+                    )
 
                 LAST_SLM_MODEL_NAME = model_to_use
                 LAST_SLM_LATENCY_MS = (time.perf_counter() - t0) * 1000
@@ -393,7 +401,13 @@ async def startup_self_test() -> tuple[bool, str, float]:
 
     try:
         spans, degraded, gemma_used = await run_gemma_detection("test warmup")
-        return not degraded, LAST_SLM_MODEL_NAME or settings.GEMMA_MODEL, LAST_SLM_LATENCY_MS
+        return (
+            not degraded,
+            LAST_SLM_MODEL_NAME or settings.GEMMA_MODEL,
+            LAST_SLM_LATENCY_MS,
+        )
     except Exception as e:
-        logger.warning(f"Startup self-test failed for model '{settings.GEMMA_MODEL}': {e}")
+        logger.warning(
+            f"Startup self-test failed for model '{settings.GEMMA_MODEL}': {e}"
+        )
         return False, settings.GEMMA_MODEL, 0.0

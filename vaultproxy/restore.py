@@ -1,8 +1,13 @@
 import json
 import re
-from collections.abc import Callable
+from collections.abc import AsyncGenerator, Callable
+from typing import Any
 
 from vaultproxy.vault import RequestVault
+
+
+def _make_repl(v: str) -> Callable[[re.Match[str]], str]:
+    return lambda _: v
 
 
 def restore_text(text: str, vault: RequestVault) -> str:
@@ -11,15 +16,12 @@ def restore_text(text: str, vault: RequestVault) -> str:
         return text
 
     res = text
-    sorted_tokens = sorted(
-        vault.token_to_value.keys(), key=len, reverse=True
-    )
+    sorted_tokens = sorted(vault.token_to_value.keys(), key=len, reverse=True)
     for token in sorted_tokens:
         val = vault.token_to_value[token]
         pattern = re.compile(re.escape(token), re.IGNORECASE)
-        res = pattern.sub(lambda _: val, res)
+        res = pattern.sub(_make_repl(val), res)
     return res
-
 
 
 def restore_json_text(text: str, vault: RequestVault) -> str:
@@ -28,15 +30,14 @@ def restore_json_text(text: str, vault: RequestVault) -> str:
         return text
 
     res = text
-    sorted_tokens = sorted(
-        vault.token_to_value.keys(), key=len, reverse=True
-    )
+    sorted_tokens = sorted(vault.token_to_value.keys(), key=len, reverse=True)
     for token in sorted_tokens:
         val = vault.token_to_value[token]
         escaped_val = json.dumps(val)[1:-1]
         pattern = re.compile(re.escape(token), re.IGNORECASE)
-        res = pattern.sub(lambda _: escaped_val, res)
+        res = pattern.sub(_make_repl(escaped_val), res)
     return res
+
 
 
 
@@ -89,3 +90,149 @@ class StreamRestorer:
             self.trace("", self.buffer, emitted)
         return emitted
 
+
+async def process_sse_stream(
+    upstream_resp: Any, client: Any, vault: RequestVault, model_name: str
+) -> AsyncGenerator[str, None]:
+    restorers: dict[tuple[int, int, str], StreamRestorer] = {}
+    line_buffer = ""
+
+    def get_restorer(
+        choice_idx: int, tool_idx: int, field: str, json_escape: bool = False
+    ) -> StreamRestorer:
+        key = (choice_idx, tool_idx, field)
+        if key not in restorers:
+            restorers[key] = StreamRestorer(vault, json_escape=json_escape)
+        return restorers[key]
+
+    try:
+        async for chunk in upstream_resp.aiter_bytes():
+            line_buffer += chunk.decode("utf-8", errors="replace")
+            lines = line_buffer.split("\n")
+            line_buffer = lines.pop()
+
+            for line in lines:
+                line_str = line.strip()
+                if not line_str:
+                    continue
+                if line_str.startswith(":"):
+                    yield f"{line_str}\n\n"
+                    continue
+                if line_str.startswith("data: "):
+                    payload = line_str[6:].strip()
+                    if payload == "[DONE]":
+                        flushed_chunks = []
+                        for key, r in restorers.items():
+                            flushed_val = r.flush()
+                            if flushed_val:
+                                flushed_chunks.append((key, flushed_val))
+                        if flushed_chunks:
+                            for (c_idx, _, field), val in flushed_chunks:
+                                delta_dict: dict[str, Any] = (
+                                    {"content": val} if field == "content" else {}
+                                )
+                                final_chunk = {
+                                    "id": "chatcmpl-restored",
+                                    "object": "chat.completion.chunk",
+                                    "created": 1700000000,
+                                    "model": model_name,
+                                    "choices": [
+                                        {
+                                            "index": c_idx,
+                                            "delta": delta_dict,
+                                            "finish_reason": None,
+                                        }
+                                    ],
+                                }
+                                yield f"data: {json.dumps(final_chunk)}\n\n"
+                        yield "data: [DONE]\n\n"
+                    else:
+                        try:
+                            data_obj = json.loads(payload)
+                            choices = data_obj.get("choices", [])
+                            if choices and isinstance(choices, list):
+                                for c in choices:
+                                    c_idx = c.get("index", 0)
+                                    delta = c.get("delta", {})
+                                    if "content" in delta and isinstance(
+                                        delta["content"], str
+                                    ):
+                                        r = get_restorer(
+                                            c_idx, 0, "content", json_escape=False
+                                        )
+                                        restored_part = r.feed(delta["content"])
+                                        delta["content"] = restored_part
+                                    if "tool_calls" in delta and isinstance(
+                                        delta["tool_calls"], list
+                                    ):
+                                        for t_idx, tc in enumerate(delta["tool_calls"]):
+                                            tc_idx = tc.get("index", t_idx)
+                                            func = tc.get("function", {})
+                                            if "arguments" in func and isinstance(
+                                                func["arguments"], str
+                                            ):
+                                                r = get_restorer(
+                                                    c_idx,
+                                                    tc_idx,
+                                                    "arguments",
+                                                    json_escape=True,
+                                                )
+                                                func["arguments"] = r.feed(
+                                                    func["arguments"]
+                                                )
+                                    if "function_call" in delta and isinstance(
+                                        delta["function_call"], dict
+                                    ):
+                                        fc = delta["function_call"]
+                                        if "arguments" in fc and isinstance(
+                                            fc["arguments"], str
+                                        ):
+                                            r = get_restorer(
+                                                c_idx,
+                                                0,
+                                                "function_call_arguments",
+                                                json_escape=True,
+                                            )
+                                            fc["arguments"] = r.feed(fc["arguments"])
+                                yield f"data: {json.dumps(data_obj)}\n\n"
+                            else:
+                                yield f"data: {json.dumps(data_obj)}\n\n"
+                        except Exception:
+                            yield f"data: {payload}\n\n"
+                else:
+                    yield f"{line_str}\n\n"
+
+        if line_buffer.strip():
+            lb = line_buffer.strip()
+            if lb.startswith("data: "):
+                p = lb[6:].strip()
+                if p == "[DONE]":
+                    flushed_chunks = []
+                    for key, r in restorers.items():
+                        flushed_val = r.flush()
+                        if flushed_val:
+                            flushed_chunks.append((key, flushed_val))
+                    if flushed_chunks:
+                        for (c_idx, _, field), val in flushed_chunks:
+                            delta_dict = {"content": val} if field == "content" else {}
+                            final_chunk = {
+                                "id": "chatcmpl-restored",
+                                "object": "chat.completion.chunk",
+                                "created": 1700000000,
+                                "model": model_name,
+                                "choices": [
+                                    {
+                                        "index": c_idx,
+                                        "delta": delta_dict,
+                                        "finish_reason": None,
+                                    }
+                                ],
+                            }
+                            yield f"data: {json.dumps(final_chunk)}\n\n"
+                    yield "data: [DONE]\n\n"
+
+    finally:
+        for r in restorers.values():
+            r.flush()
+        await upstream_resp.aclose()
+        await client.aclose()

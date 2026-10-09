@@ -83,6 +83,8 @@ Evaluation on 40 seeded test samples covering clean texts, Hinglish chat, formal
 1. **Non-Text Modalities**: VaultProxy redacts text parts only. It does not perform image OCR or audio transcription redaction.
 2. **Ambiguous Context Names**: Rule-based detectors target deterministic patterns (Aadhaar checksum, PAN, UPI handles, IFSC). Ambiguous names without explicit patterns require the optional Gemma layer (`GEMMA_BACKEND=ollama` or `gemini`).
 3. **Modified LLM Output Tokens**: If an upstream model alters a token (e.g. changes `[PAN_1]` to `[pan 1]`), restoration is performed case-insensitively, but heavily mangled tokens will not match.
+4. **Embeddings & Token IDs**: When using `/v1/embeddings`, VaultProxy adds the `X-Vault-Warning` header indicating that embeddings of masked text are not comparable across requests. Integer token ID lists cannot be inspected and return HTTP 400 in production mode.
+
 
 ---
 

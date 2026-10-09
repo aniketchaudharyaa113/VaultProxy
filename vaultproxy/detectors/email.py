@@ -2,9 +2,7 @@ import re
 
 from vaultproxy.detectors import Span
 
-EMAIL_REGEX = re.compile(
-    r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b"
-)
+EMAIL_REGEX = re.compile(r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b")
 
 
 def detect_email(text: str) -> list[Span]:

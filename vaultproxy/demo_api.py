@@ -43,16 +43,20 @@ async def demo_status() -> dict[str, Any]:
                     model_names = [m.get("name", "") for m in models_data]
                     if model_names:
                         reachable = True
-                        if not any(settings.GEMMA_MODEL in name for name in model_names):
+                        if not any(
+                            settings.GEMMA_MODEL in name for name in model_names
+                        ):
                             model_name = model_names[0]
         except Exception:
-            reachable = (backend == "auto")
+            reachable = backend == "auto"
     elif backend == "gemini":
         reachable = bool(settings.GEMINI_API_KEY)
     else:
         reachable = False
 
-    upstream_host = urlparse(settings.UPSTREAM_BASE_URL).netloc or settings.UPSTREAM_BASE_URL
+    upstream_host = (
+        urlparse(settings.UPSTREAM_BASE_URL).netloc or settings.UPSTREAM_BASE_URL
+    )
 
     return {
         "gemma_backend": settings.GEMMA_BACKEND,
@@ -192,7 +196,9 @@ async def demo_run(payload: dict[str, Any]) -> dict[str, Any]:
             resp = await client.post(url, json=req_payload)
             upstream_ms = (time.perf_counter() - t0) * 1000
             if resp.status_code != 200:
-                raise HTTPException(status_code=resp.status_code, detail=f"Upstream error: {resp.text}")
+                raise HTTPException(
+                    status_code=resp.status_code, detail=f"Upstream error: {resp.text}"
+                )
 
             if stream:
                 reply_text = ""
@@ -202,7 +208,11 @@ async def demo_run(payload: dict[str, Any]) -> dict[str, Any]:
                         continue
                     try:
                         cdata = json.loads(line[6:])
-                        delta = cdata.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                        delta = (
+                            cdata.get("choices", [{}])[0]
+                            .get("delta", {})
+                            .get("content", "")
+                        )
                         if delta:
                             reply_text += delta
                     except Exception:
@@ -285,7 +295,9 @@ async def demo_run(payload: dict[str, Any]) -> dict[str, Any]:
         resp = await client.post(url, json=upstream_payload)
         upstream_ms = (time.perf_counter() - t2) * 1000
         if resp.status_code != 200:
-            raise HTTPException(status_code=resp.status_code, detail=f"Upstream error: {resp.text}")
+            raise HTTPException(
+                status_code=resp.status_code, detail=f"Upstream error: {resp.text}"
+            )
 
         if stream:
             reply_raw = ""
@@ -297,7 +309,11 @@ async def demo_run(payload: dict[str, Any]) -> dict[str, Any]:
                     continue
                 try:
                     cdata = json.loads(line[6:])
-                    delta = cdata.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                    delta = (
+                        cdata.get("choices", [{}])[0]
+                        .get("delta", {})
+                        .get("content", "")
+                    )
                     if delta:
                         reply_raw += delta
                         restored_chunks.append(restorer.feed(delta))
@@ -308,9 +324,7 @@ async def demo_run(payload: dict[str, Any]) -> dict[str, Any]:
         else:
             resp_data = resp.json()
             reply_raw = (
-                resp_data.get("choices", [{}])[0]
-                .get("message", {})
-                .get("content", "")
+                resp_data.get("choices", [{}])[0].get("message", {}).get("content", "")
             )
             restored_reply = restore_text(reply_raw, vault)
 

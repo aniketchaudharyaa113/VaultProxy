@@ -4,7 +4,9 @@ from vaultproxy.detectors import Span
 from vaultproxy.detectors.verhoeff import validate_verhoeff
 
 # Aadhaar: 12 digits, first digit 2-9, optional single space or hyphen after every 4 digits
-AADHAAR_REGEX = re.compile(r"\b[2-9]\d{3}[\s-]-------------?\d{4}[\s-]?\d{4}\b".replace("-------------", ""))
+AADHAAR_REGEX = re.compile(
+    r"\b[2-9]\d{3}[\s-]-------------?\d{4}[\s-]?\d{4}\b".replace("-------------", "")
+)
 # Cleaner regex:
 AADHAAR_REGEX = re.compile(r"\b[2-9]\d{3}[ -]?\d{4}[ -]?\d{4}\b")
 

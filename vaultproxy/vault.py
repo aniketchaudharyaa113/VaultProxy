@@ -130,7 +130,9 @@ class RequestVault:
             any_degraded = False
             any_gemma_used = False
             if "messages" in res_dict and isinstance(res_dict["messages"], list):
-                msgs, degraded, gemma_used = await self.mask_messages(res_dict["messages"])
+                msgs, degraded, gemma_used = await self.mask_messages(
+                    res_dict["messages"]
+                )
                 res_dict["messages"] = msgs
                 any_degraded = any_degraded or degraded
                 any_gemma_used = any_gemma_used or gemma_used
@@ -161,7 +163,7 @@ class RequestVault:
         async def _walk(obj: Any, parent_key: str = "") -> Any:
             nonlocal any_degraded, any_gemma_used
             if isinstance(obj, dict):
-                res = {}
+                res: dict[str, Any] = {}
                 for k, v in obj.items():
                     if k == "messages" and isinstance(v, list):
                         # Prepend system prompt instruction and walk messages
@@ -203,4 +205,3 @@ class RequestVault:
 
         masked_payload = await _walk(body_json)
         return masked_payload, any_degraded, any_gemma_used
-

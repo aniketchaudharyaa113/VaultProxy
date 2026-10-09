@@ -219,6 +219,9 @@ def test_e2e_strict_mode_503_on_slm_failure(client):
     """Test strict mode returns 503 and forwards nothing when SLM fails."""
     with patch.object(settings, "STRICT_MODE", True):
         with patch(
+            "vaultproxy.masking.run_gemma_detection",
+            side_effect=GemmaLayerError("SLM offline"),
+        ), patch(
             "vaultproxy.vault.run_gemma_detection",
             side_effect=GemmaLayerError("SLM offline"),
         ):

@@ -3,9 +3,7 @@ import re
 from vaultproxy.detectors import Span
 
 # Indian mobile: optional +91 or 0 prefix, 10 digits starting with [6-9], optional single space or hyphen
-MOBILE_REGEX = re.compile(
-    r"(?<!\d)(?:\+91[ -]?|0)?[6-9]\d{3,5}[ -]?\d{4,6}(?!\d)"
-)
+MOBILE_REGEX = re.compile(r"(?<!\d)(?:\+91[ -]?|0)?[6-9]\d{3,5}[ -]?\d{4,6}(?!\d)")
 
 
 def detect_mobile(text: str) -> list[Span]:

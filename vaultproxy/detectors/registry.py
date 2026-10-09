@@ -1,4 +1,3 @@
-
 from vaultproxy.detectors import Span
 from vaultproxy.detectors.aadhaar import detect_aadhaar
 from vaultproxy.detectors.email import detect_email
