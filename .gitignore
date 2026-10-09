@@ -1,6 +1,6 @@
-.env
-__pycache__/
+.venv
+.pytest_cache
+.coverage
+htmlcov
+__pycache__
 *.pyc
-.pytest_cache/
-.venv/
-bench/RESULTS.md
