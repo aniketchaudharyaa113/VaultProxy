@@ -1,7 +1,6 @@
-import pytest
 from vaultproxy.detectors import Span
+from vaultproxy.restore import StreamRestorer, restore_text
 from vaultproxy.vault import RequestVault
-from vaultproxy.restore import restore_text, StreamRestorer
 
 
 def test_vault_mask_and_restore():

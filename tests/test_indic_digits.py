@@ -1,5 +1,5 @@
-from vaultproxy.detectors.verhoeff import generate_verhoeff
 from vaultproxy.detectors.registry import run_rule_detectors
+from vaultproxy.detectors.verhoeff import generate_verhoeff
 from vaultproxy.vault import RequestVault
 
 

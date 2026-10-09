@@ -1,5 +1,5 @@
 import re
-from typing import List
+
 from vaultproxy.detectors import Span
 
 UPI_HANDLES = (
@@ -11,8 +11,8 @@ UPI_REGEX = re.compile(
 )
 
 
-def detect_upi(text: str) -> List[Span]:
-    spans: List[Span] = []
+def detect_upi(text: str) -> list[Span]:
+    spans: list[Span] = []
     for match in UPI_REGEX.finditer(text):
         spans.append(
             Span(

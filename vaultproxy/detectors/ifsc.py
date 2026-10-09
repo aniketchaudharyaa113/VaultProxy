@@ -1,12 +1,12 @@
 import re
-from typing import List
+
 from vaultproxy.detectors import Span
 
 IFSC_REGEX = re.compile(r"\b[A-Z]{4}0[A-Z0-9]{6}\b")
 
 
-def detect_ifsc(text: str) -> List[Span]:
-    spans: List[Span] = []
+def detect_ifsc(text: str) -> list[Span]:
+    spans: list[Span] = []
     for match in IFSC_REGEX.finditer(text):
         spans.append(
             Span(

@@ -1,5 +1,6 @@
 import json
 import random
+
 from vaultproxy.detectors.verhoeff import generate_verhoeff
 
 random.seed(42)

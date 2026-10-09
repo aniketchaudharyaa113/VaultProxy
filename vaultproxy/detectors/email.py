@@ -1,5 +1,5 @@
 import re
-from typing import List
+
 from vaultproxy.detectors import Span
 
 EMAIL_REGEX = re.compile(
@@ -7,8 +7,8 @@ EMAIL_REGEX = re.compile(
 )
 
 
-def detect_email(text: str) -> List[Span]:
-    spans: List[Span] = []
+def detect_email(text: str) -> list[Span]:
+    spans: list[Span] = []
     for match in EMAIL_REGEX.finditer(text):
         spans.append(
             Span(

@@ -1,5 +1,6 @@
 import re
-from typing import Callable, Optional
+from collections.abc import Callable
+
 from vaultproxy.vault import RequestVault
 
 
@@ -25,7 +26,7 @@ class StreamRestorer:
     def __init__(
         self,
         vault: RequestVault,
-        trace: Optional[Callable[[str, str, str], None]] = None,
+        trace: Callable[[str, str, str], None] | None = None,
     ):
         self.vault = vault
         self.buffer = ""

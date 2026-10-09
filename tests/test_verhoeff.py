@@ -1,5 +1,6 @@
 import random
-from vaultproxy.detectors.verhoeff import validate_verhoeff, generate_verhoeff
+
+from vaultproxy.detectors.verhoeff import generate_verhoeff, validate_verhoeff
 
 
 def test_verhoeff_round_trip():

@@ -1,9 +1,11 @@
 import json
 import logging
 import re
-from typing import List, Tuple, Dict, Any
+from typing import Any
+
 import httpx
 from pydantic import BaseModel, ValidationError
+
 from vaultproxy.config import settings
 from vaultproxy.detectors import Span
 
@@ -30,7 +32,7 @@ Input text: {text}
 """
 
 
-def parse_gemma_json(raw_str: str, original_text: str) -> List[Span]:
+def parse_gemma_json(raw_str: str, original_text: str) -> list[Span]:
     """Parse JSON output from Gemma model and extract verbatim spans."""
     clean_str = raw_str.strip()
 
@@ -47,7 +49,7 @@ def parse_gemma_json(raw_str: str, original_text: str) -> List[Span]:
     except Exception:
         return []
 
-    items_list: List[Dict[str, Any]] = []
+    items_list: list[dict[str, Any]] = []
 
     if isinstance(data, list):
         items_list = data
@@ -66,7 +68,7 @@ def parse_gemma_json(raw_str: str, original_text: str) -> List[Span]:
                         if isinstance(sub, str):
                             items_list.append({"type": k.upper(), "text": sub})
 
-    spans: List[Span] = []
+    spans: list[Span] = []
     seen_ranges = set()
 
     for item in items_list:
@@ -107,9 +109,9 @@ def parse_gemma_json(raw_str: str, original_text: str) -> List[Span]:
     return spans
 
 
-def _heuristic_gemma_fallback(text: str) -> List[Span]:
+def _heuristic_gemma_fallback(text: str) -> list[Span]:
     """Smart fallback extractor for PERSON & ADDRESS when Ollama/Gemini is offline."""
-    spans: List[Span] = []
+    spans: list[Span] = []
 
     # Heuristic PERSON patterns (e.g. "Rajesh Sharma", "Vikram", "Aarav")
     person_patterns = [
@@ -137,7 +139,7 @@ def _heuristic_gemma_fallback(text: str) -> List[Span]:
     return spans
 
 
-async def run_gemma_detection(text: str) -> Tuple[List[Span], bool, bool]:
+async def run_gemma_detection(text: str) -> tuple[list[Span], bool, bool]:
     """Run Gemma model detection on text.
 
     Returns:

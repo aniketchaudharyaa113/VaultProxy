@@ -1,5 +1,5 @@
 import re
-from typing import List
+
 from vaultproxy.detectors import Span
 
 AKIA_REGEX = re.compile(r"\bAKIA[0-9A-Z]{16}\b")
@@ -10,8 +10,8 @@ JWT_REGEX = re.compile(
 )
 
 
-def detect_secrets(text: str) -> List[Span]:
-    spans: List[Span] = []
+def detect_secrets(text: str) -> list[Span]:
+    spans: list[Span] = []
 
     for regex in (AKIA_REGEX, GHP_REGEX, GITHUB_PAT_REGEX, JWT_REGEX):
         for match in regex.finditer(text):

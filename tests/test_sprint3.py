@@ -1,13 +1,15 @@
-import pytest
-import json
 import asyncio
-from unittest.mock import AsyncMock, patch
+import json
+from unittest.mock import patch
+
 import httpx
+import pytest
+
 from vaultproxy.config import settings
 from vaultproxy.gemma_layer import (
-    run_gemma_detection,
     GemmaLayerError,
     parse_gemma_json,
+    run_gemma_detection,
 )
 from vaultproxy.report import create_vault_report_header
 

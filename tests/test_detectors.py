@@ -1,11 +1,11 @@
-from vaultproxy.detectors.verhoeff import generate_verhoeff
 from vaultproxy.detectors.aadhaar import detect_aadhaar
-from vaultproxy.detectors.pan import detect_pan
-from vaultproxy.detectors.mobile import detect_mobile
-from vaultproxy.detectors.upi import detect_upi
-from vaultproxy.detectors.ifsc import detect_ifsc
 from vaultproxy.detectors.email import detect_email
+from vaultproxy.detectors.ifsc import detect_ifsc
+from vaultproxy.detectors.mobile import detect_mobile
+from vaultproxy.detectors.pan import detect_pan
 from vaultproxy.detectors.secrets import detect_secrets
+from vaultproxy.detectors.upi import detect_upi
+from vaultproxy.detectors.verhoeff import generate_verhoeff
 
 
 def test_aadhaar_detector():

@@ -1,14 +1,15 @@
-import sys
-import json
 import asyncio
-from typing import Dict, Any, List
+import json
+import sys
+from typing import Any
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 app = FastAPI(title="Mock Upstream OpenAI API")
 
 
-def extract_last_user_message(messages: List[Dict[str, Any]]) -> str:
+def extract_last_user_message(messages: list[dict[str, Any]]) -> str:
     for msg in reversed(messages):
         if msg.get("role") == "user":
             content = msg.get("content", "")

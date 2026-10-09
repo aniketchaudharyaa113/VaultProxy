@@ -1,16 +1,16 @@
-import os
-import sys
-import json
-import time
-import asyncio
 import argparse
-from typing import List, Dict, Any
+import asyncio
+import json
+import os
+import time
+from typing import Any
+
 from vaultproxy.detectors.registry import run_rule_detectors
 from vaultproxy.gemma_layer import run_gemma_detection
 from vaultproxy.merge import merge_spans
 
 
-def evaluate_set(samples: List[Dict[str, Any]], use_gemma: bool = False):
+def evaluate_set(samples: list[dict[str, Any]], use_gemma: bool = False):
     stats = {}
     false_positives = []
     false_negatives = []
@@ -112,13 +112,13 @@ def main():
     # Load generated dataset
     generated_samples = []
     if os.path.exists("bench/dataset.json"):
-        with open("bench/dataset.json", "r", encoding="utf-8") as f:
+        with open("bench/dataset.json", encoding="utf-8") as f:
             generated_samples = json.load(f)
 
     # Load held-out dataset
     heldout_samples = []
     if os.path.exists("bench/heldout.jsonl"):
-        with open("bench/heldout.jsonl", "r", encoding="utf-8") as f:
+        with open("bench/heldout.jsonl", encoding="utf-8") as f:
             for line in f:
                 if line.strip():
                     heldout_samples.append(json.loads(line))

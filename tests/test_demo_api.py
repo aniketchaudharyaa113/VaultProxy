@@ -1,6 +1,7 @@
-import pytest
 from unittest.mock import patch
+
 from fastapi.testclient import TestClient
+
 from vaultproxy.config import settings
 from vaultproxy.server import app
 

@@ -1,5 +1,5 @@
 import re
-from typing import List
+
 from vaultproxy.detectors import Span
 from vaultproxy.detectors.verhoeff import validate_verhoeff
 
@@ -9,8 +9,8 @@ AADHAAR_REGEX = re.compile(r"\b[2-9]\d{3}[\s-]-------------?\d{4}[\s-]?\d{4}\b".
 AADHAAR_REGEX = re.compile(r"\b[2-9]\d{3}[ -]?\d{4}[ -]?\d{4}\b")
 
 
-def detect_aadhaar(text: str) -> List[Span]:
-    spans: List[Span] = []
+def detect_aadhaar(text: str) -> list[Span]:
+    spans: list[Span] = []
     for match in AADHAAR_REGEX.finditer(text):
         raw_match = match.group(0)
         digits_only = re.sub(r"\D", "", raw_match)

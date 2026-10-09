@@ -1,5 +1,5 @@
 import re
-from typing import List
+
 from vaultproxy.detectors import Span
 
 # Indian mobile: optional +91 or 0 prefix, 10 digits starting with [6-9], optional single space or hyphen
@@ -8,8 +8,8 @@ MOBILE_REGEX = re.compile(
 )
 
 
-def detect_mobile(text: str) -> List[Span]:
-    spans: List[Span] = []
+def detect_mobile(text: str) -> list[Span]:
+    spans: list[Span] = []
     for match in MOBILE_REGEX.finditer(text):
         raw = match.group(0)
         # Extract digits
