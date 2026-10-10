@@ -10,4 +10,4 @@
 | Phase 2.6 | 2026-10-10 | d18ab1b | 125 | 83% | -227 | - | SLM chunking limited to 4 chunks (24k chars total) |
 | Phase 5 | 2026-10-10 | 1d81936 | 136 | 83% | +450 | VAULT_AUTH_TOKEN, MAX_BODY_BYTES, REQUEST_TIMEOUT_SECONDS, MAX_CONCURRENT_REQUESTS | Upstream network latency under extreme load |
 | Phase 5.1 | 2026-10-10 | 26c769b | 144 | 84% | +76 | None (0 new settings) | None |
-| Phase 5.2 | 2026-10-10 | PENDING_COMMIT | 150 | 86% | +140 | None (0 new settings) | None |
+| Phase 5.2 | 2026-10-10 | f798cce | 150 | 86% | +140 | None (0 new settings) | None |
