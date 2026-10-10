@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     VAULT_PROFILE: str = "development"
     NON_TEXT_POLICY: str = ""
 
+    # Phase 5: Production safety settings
+    VAULT_AUTH_TOKEN: str = ""  # Client auth token for production access
+    MAX_BODY_BYTES: int = 10485760  # 10MB max request body size limit
+    REQUEST_TIMEOUT_SECONDS: float = 60.0  # Max total request execution timeout in seconds
+    MAX_CONCURRENT_REQUESTS: int = 50  # Max concurrent in-flight requests before HTTP 429
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @field_validator("VAULT_PROFILE")
@@ -70,5 +76,16 @@ class Settings(BaseSettings):
             raise ValueError("GEMMA_MODEL cannot be empty.")
         return v.strip()
 
+    def check_production_constraints(self) -> None:
+        """Validate startup production rules."""
+        if self.VAULT_PROFILE.lower() == "production":
+            if self.DEMO_MODE:
+                raise ValueError("DEMO_MODE=true is refused when VAULT_PROFILE=production.")
+            if not self.VAULT_AUTH_TOKEN or len(self.VAULT_AUTH_TOKEN) < 24:
+                raise ValueError(
+                    "VAULT_AUTH_TOKEN is required in production profile and must be at least 24 characters long."
+                )
+
 
 settings = Settings()
+settings.check_production_constraints()

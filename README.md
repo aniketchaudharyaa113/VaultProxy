@@ -4,7 +4,7 @@ A local-first, privacy-preserving proxy for LLM applications focused on Indian d
 
 VaultProxy intercepts OpenAI-compatible requests, detects sensitive values across all message contents, replaces them with typed tokens (e.g. `[PAN_1]`), forwards the masked payload to upstream LLMs, and restores the real values in incoming responses (including streamed SSE chunks).
 
-> ⚠️ **Notice**: VaultProxy is a risk-reduction tool. No privacy tool is 100% safe. Always verify compliance for your specific deployment.
+> ⚠️ **Notice**: VaultProxy is a risk-reduction tool. No privacy tool provides absolute protection. Always verify compliance for your specific deployment.
 
 ---
 

@@ -10,13 +10,16 @@ from vaultproxy.config import settings
 from vaultproxy.detectors import Span
 from vaultproxy.gemma_layer import GemmaLayerError
 from vaultproxy.masking import (
-    SLM_CHUNK_CHARS,
     SLM_MAX_CHUNKS,
     MaskingEngine,
-    chunk_combined_text,
     is_candidate_for_slm,
 )
-from vaultproxy.restore import StreamRestorer, process_sse_stream, restore_json_text, restore_text
+from vaultproxy.restore import (
+    StreamRestorer,
+    process_sse_stream,
+    restore_json_text,
+    restore_text,
+)
 from vaultproxy.server import app
 from vaultproxy.vault import RequestVault
 
@@ -114,7 +117,7 @@ def test_slm_candidate_filter_and_chunking():
         # 40 string fields + 20,000 char tools list (within 4 chunks of 6000 chars)
         large_tools = [
             {"type": "function", "function": {"name": f"fn_{i}", "description": "Detailed tool description with words " * 15}}
-            for i in range(40)
+            for i in range(32)
         ]
         payload = {
             "model": "gpt-4o",
@@ -126,10 +129,11 @@ def test_slm_candidate_filter_and_chunking():
             mock_gemma.return_value = ([], False, True)
 
             # Execution under chunk limit (requires ~4 chunks <= SLM_MAX_CHUNKS)
-            res_payload, degraded, gemma_used = await engine.mask_payload(payload)
+            res_payload, degraded, gemma_used, slm_chunks = await engine.mask_payload(payload)
             assert mock_gemma.call_count <= SLM_MAX_CHUNKS
             assert degraded is False
             assert gemma_used is True
+            assert slm_chunks > 0
 
         # Test exceeding max chunks (>4 chunks)
         huge_tools = [
@@ -145,7 +149,7 @@ def test_slm_candidate_filter_and_chunking():
         with patch("vaultproxy.masking.run_gemma_detection", new_callable=AsyncMock) as mock_gemma:
             mock_gemma.return_value = ([], False, True)
             with patch.object(settings, "STRICT_MODE", False):
-                _, degraded, _ = await engine.mask_payload(huge_payload)
+                _, degraded, _, _ = await engine.mask_payload(huge_payload)
                 assert degraded is True
 
             with patch.object(settings, "STRICT_MODE", True):
@@ -156,34 +160,54 @@ def test_slm_candidate_filter_and_chunking():
 
 
 def test_slm_chunk_boundary_cross_detection():
+    """P3 straddle test: prove a full name straddling chunk boundary is detected as ONE complete span."""
     import anyio
 
     async def _test():
         vault = RequestVault()
         engine = MaskingEngine(vault)
 
-        # Create text exceeding single chunk (6000 chars)
-        part1 = "Some context text. " * 300  # ~5700 chars
-        secret_name = "Rajesh Sharma"
-        part2 = f" User name is {secret_name}. " + "More text. " * 50
+        # Patch small chunk size and overlap
+        small_chunk_size = 50
+        small_overlap = 20
+
+        # Create text where "Rajesh Sharma" straddles index 50
+        # "Context padding text to fill up first chunk. Raje" is 47 chars
+        # "sh Sharma" starts at index 47. Index 50 cuts right through "Rajesh" ("Raje" | "sh Sharma")
+        full_name = "Rajesh Sharma"
+        part1 = "Context padding text to fill up first chunk. Raje"
+        part2 = "sh Sharma and more text after name."
+        full_text = part1 + part2
+        assert full_name in full_text
+        name_idx = full_text.find(full_name)
+        assert name_idx < 50 < name_idx + len(full_name)  # Confirms straddling boundary
 
         payload = {
             "model": "gpt-4o",
-            "messages": [{"role": "user", "content": part1 + part2}],
+            "messages": [{"role": "user", "content": full_text}],
         }
 
         async def mock_chunk_detect(chunk_text: str):
             spans = []
-            idx = chunk_text.find(secret_name)
+            idx = chunk_text.find(full_name)
+            print(f"MOCK DETECT chunk_text={chunk_text!r} -> idx={idx}")
             if idx != -1:
-                spans.append(Span(start=idx, end=idx + len(secret_name), type="NAME", source="gemma", score=1.0))
+                spans.append(Span(start=idx, end=idx + len(full_name), type="NAME", source="gemma", score=1.0))
             return spans, False, True
 
-        with patch("vaultproxy.masking.run_gemma_detection", side_effect=mock_chunk_detect):
-            res_payload, degraded, gemma_used = await engine.mask_payload(payload)
+        with patch("vaultproxy.masking.SLM_CHUNK_CHARS", small_chunk_size), \
+             patch("vaultproxy.masking.SLM_OVERLAP_CHARS", small_overlap), \
+             patch("vaultproxy.masking.run_gemma_detection", side_effect=mock_chunk_detect):
+
+            res_payload, degraded, gemma_used, slm_chunks = await engine.mask_payload(payload)
             masked_text = res_payload["messages"][1]["content"]
-            assert secret_name not in masked_text
+
+            assert full_name not in masked_text
             assert "[NAME_1]" in masked_text
+            assert slm_chunks >= 2
+            # Verify exact vault token maps to exact full span text
+            token_val = vault.token_to_value["[NAME_1]"]
+            assert token_val == full_name
 
     anyio.run(_test)
 
@@ -238,7 +262,7 @@ def test_streaming_parallel_tools_resiliency_exit_paths(client):
         vault.get_or_create_token("9876543210", "MOBILE")
 
         async def mock_stream_bytes():
-            yield f'data: {json.dumps({"choices": [{"index": 0, "delta": {"content": "Partial token [MOB"}}]})}\n\n'.encode("utf-8")
+            yield f'data: {json.dumps({"choices": [{"index": 0, "delta": {"content": "Partial token [MOB"}}]})}\n\n'.encode()
             raise httpx.ReadError("Mid-stream disconnect")
 
         mock_upstream = AsyncMock()
@@ -475,7 +499,7 @@ def test_embeddings_warning_and_token_ids(client):
 # -------------------------------------------------------------------
 # Additional Coverage Boost Tests for Targets (Item 3)
 # -------------------------------------------------------------------
-def test_vault_methods_coverage():
+def test_vault_token_reuse_and_clearing_behavior():
     vault = RequestVault()
     assert vault.mask_text("", []) == ""
     token1 = vault.get_or_create_token("ABCPB1234F", "PAN")
@@ -511,7 +535,7 @@ def test_restore_and_server_edge_cases(client):
         assert resp.status_code == 400
 
 
-def test_restore_sse_uncovered_branches():
+def test_restore_sse_legacy_function_calls_and_partial_tokens_behavior():
     import anyio
 
     async def _test():

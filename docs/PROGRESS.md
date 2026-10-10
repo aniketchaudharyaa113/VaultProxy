@@ -8,3 +8,4 @@
 | Phase 2 | 2026-10-10 | d331704 | 121 | 72% | +310 | VAULT_PROFILE, MASK_SCOPE, NON_TEXT_POLICY | Phase 2.5 hardening items pending verification |
 | Phase 2.5 | 2026-10-10 | 444b8c5 | 121 | 72% | +92 | - | Payloads >50k chars degrade or return 503 in strict mode |
 | Phase 2.6 | 2026-10-10 | d18ab1b | 125 | 83% | -227 | - | SLM chunking limited to 4 chunks (24k chars total) |
+| Phase 5 | 2026-10-10 | 1d81936 | 136 | 83% | +450 | VAULT_AUTH_TOKEN, MAX_BODY_BYTES, REQUEST_TIMEOUT_SECONDS, MAX_CONCURRENT_REQUESTS | Upstream network latency under extreme load |

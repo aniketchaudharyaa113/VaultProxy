@@ -111,7 +111,7 @@ def test_golden_vault_report_header_schema():
     parsed = json.loads(header)
 
     assert isinstance(parsed, dict)
-    assert set(parsed.keys()) == {"masked", "degraded", "gemma_used"}
+    assert set(parsed.keys()) == {"masked", "degraded", "gemma_used", "slm_chunks"}
     assert parsed["masked"] == {"AADHAAR": 2, "PAN": 1, "MOBILE": 3}
     assert parsed["degraded"] is False
     assert parsed["gemma_used"] is True

@@ -11,6 +11,7 @@ from vaultproxy.merge import merge_spans
 from vaultproxy.vault import RequestVault
 
 SLM_CHUNK_CHARS = 6000
+SLM_OVERLAP_CHARS = 300
 SLM_MAX_CHUNKS = 4
 
 HEX_PATTERN = re.compile(r"^[0-9a-fA-F]{16,}$")
@@ -64,27 +65,34 @@ def is_exact_structural_allowlist_position(k: str, path: list[Any]) -> bool:
 
 
 def chunk_combined_text(
-    text: str, max_chunk_size: int = SLM_CHUNK_CHARS
+    text: str,
+    max_chunk_size: int = SLM_CHUNK_CHARS,
+    overlap_chars: int = SLM_OVERLAP_CHARS,
 ) -> list[tuple[int, int, str]]:
-    """Split text into chunks of size <= max_chunk_size at clean boundaries."""
+    """Split text into overlapping chunks of size <= max_chunk_size with overlap_chars overlap."""
     chunks: list[tuple[int, int, str]] = []
     start = 0
     n = len(text)
+    min_progress = max(1, overlap_chars + 1)
     while start < n:
         if start + max_chunk_size >= n:
             chunks.append((start, n, text[start:n]))
             break
-        end = start + max_chunk_size
+        target_end = start + max_chunk_size
         best = -1
+        min_sep_pos = start + min_progress
         for sep in ("\n---\n", "\n\n", "\n", ". ", "? ", "! ", " "):
-            idx = text.rfind(sep, start, end)
-            if idx > start:
+            idx = text.rfind(sep, min_sep_pos, target_end)
+            if idx >= min_sep_pos:
                 best = idx + len(sep) if sep in (". ", "? ", "! ") else idx
                 break
-        if best <= start:
-            best = end
+        if best < min_sep_pos:
+            best = target_end
         chunks.append((start, best, text[start:best]))
-        start = best
+        next_start = max(start + 1, best - overlap_chars)
+        if next_start >= n:
+            break
+        start = next_start
     return chunks
 
 
@@ -96,7 +104,7 @@ class MaskingEngine:
 
     async def mask_payload(
         self, body_json: dict[str, Any]
-    ) -> tuple[dict[str, Any], bool, bool]:
+    ) -> tuple[dict[str, Any], bool, bool, int]:
         """Deep-walk request payload, scanning every string value except structural allowlist positions."""
         collected_strings: list[tuple[str, list[Any]]] = []
 
@@ -134,12 +142,18 @@ class MaskingEngine:
         }
         any_degraded = False
         any_gemma_used = False
+        slm_chunks_count = 0
 
         if slm_candidates:
             combined_text_parts = [s for _, s in slm_candidates]
             combined_text = "\n---\n".join(combined_text_parts)
 
-            chunks = chunk_combined_text(combined_text, max_chunk_size=SLM_CHUNK_CHARS)
+            chunks = chunk_combined_text(
+                combined_text,
+                max_chunk_size=SLM_CHUNK_CHARS,
+                overlap_chars=SLM_OVERLAP_CHARS,
+            )
+            slm_chunks_count = len(chunks)
             time_budget = settings.GEMMA_TIMEOUT_SECONDS * 2.0
 
             if len(chunks) > SLM_MAX_CHUNKS:
@@ -247,4 +261,4 @@ class MaskingEngine:
             return obj
 
         masked_payload = _reconstruct(body_json, [])
-        return masked_payload, any_degraded, any_gemma_used
+        return masked_payload, any_degraded, any_gemma_used, slm_chunks_count

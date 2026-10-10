@@ -1,7 +1,8 @@
+import hmac
 import os
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse
 
 from vaultproxy.config import settings
@@ -11,6 +12,19 @@ router = APIRouter()
 LAST_MASKED_REQUEST: dict[str, Any] = {}
 
 
+def is_authenticated_request(request: Request) -> bool:
+    if not settings.VAULT_AUTH_TOKEN:
+        return True
+    auth_header = request.headers.get("authorization")
+    if not auth_header:
+        return False
+    parts = auth_header.split(maxsplit=1)
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        return False
+    token = parts[1].strip()
+    return hmac.compare_digest(token.encode("utf-8"), settings.VAULT_AUTH_TOKEN.encode("utf-8"))
+
+
 @router.get("/health")
 @router.get("/healthz")
 async def health() -> dict[str, str]:
@@ -18,15 +32,20 @@ async def health() -> dict[str, str]:
 
 
 @router.get("/readyz")
-async def readyz() -> dict[str, Any]:
+async def readyz(request: Request) -> dict[str, Any]:
     from vaultproxy.gemma_layer import (
         LAST_SLM_LATENCY_MS,
         LAST_SLM_MODEL_NAME,
         circuit_breaker,
     )
 
+    status_val = "ready" if circuit_breaker.state != "OPEN" else "degraded"
+    if settings.VAULT_PROFILE.lower() == "production":
+        if not is_authenticated_request(request):
+            return {"status": status_val}
+
     return {
-        "status": "ready" if circuit_breaker.state != "OPEN" else "degraded",
+        "status": status_val,
         "slm_backend": settings.GEMMA_BACKEND,
         "slm_model": LAST_SLM_MODEL_NAME or settings.GEMMA_MODEL,
         "slm_latency_ms": LAST_SLM_LATENCY_MS,

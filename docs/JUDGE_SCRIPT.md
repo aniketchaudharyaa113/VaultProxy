@@ -19,10 +19,10 @@ Welcome judges! VaultProxy is a local-first, privacy-preserving proxy for LLM ap
 1. Click **Tab "Gemma Impact"**:
    - Explain: Deterministic rules catch structured patterns (Aadhaar checksum, PAN, UPI handles).
    - The optional local Gemma layer (`GEMMA_BACKEND=ollama`) extracts unstructured names and addresses in Hinglish/Latin script.
-   - Show verbatim verification guarantee: VaultProxy ignores any hallucinated/rewritten strings not present verbatim in original text.
+   - Show verbatim verification check: VaultProxy ignores any hallucinated/rewritten strings not present verbatim in original text.
 2. Click **Tab "Stream Trace"** -> Click **"Start Trace"**:
    - Point to the **Held Buffer** column highlighting partial token brackets (e.g., `[PAN_`).
-   - Explain: `StreamRestorer` holds back incomplete token brackets up to 24 chars across SSE chunks to guarantee seamless streaming token restoration without broken output.
+   - Explain: `StreamRestorer` holds back incomplete token brackets up to 24 chars across SSE chunks to ensure seamless streaming token restoration without broken output.
 
 ### Minute 3: Fail-Closed Safety & Benchmark Honesty (Tab: "Failure Modes" & "Benchmark")
 1. Click **Tab "Failure Modes"**:
@@ -37,8 +37,8 @@ Welcome judges! VaultProxy is a local-first, privacy-preserving proxy for LLM ap
 
 ## 🙋‍♂️ 8 Likely Judge Questions & Honest Answers
 
-### Q1: Is VaultProxy 100% safe against all PII leaks?
-**Answer**: No privacy tool is 100% safe. VaultProxy is a **risk-reduction tool**. Deterministic rule-based detectors achieve 100% precision on structured formats (Aadhaar Verhoeff checksum, PAN, IFSC, UPI handles), while the Gemma layer assists with names and addresses.
+### Q1: Does VaultProxy eliminate all PII leaks?
+**Answer**: No privacy tool provides absolute protection. VaultProxy is a **risk-reduction tool**. Deterministic rule-based detectors achieve high precision on structured formats (Aadhaar Verhoeff checksum, PAN, IFSC, UPI handles), while the Gemma layer assists with names and addresses.
 
 ### Q2: What happens if an upstream LLM mangles or changes a token like `[PAN_1]` to `[pan 1]`?
 **Answer**: Token restoration is case-insensitive (restores `[pan_1]` or `[PAN_1]`). However, if an upstream model heavily mangles the token structure, the token will not match and will return as text. System prompts instruct the LLM to preserve placeholders verbatim.
