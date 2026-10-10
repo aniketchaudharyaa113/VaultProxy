@@ -221,9 +221,6 @@ def test_e2e_strict_mode_503_on_slm_failure(client):
         with patch(
             "vaultproxy.masking.run_gemma_detection",
             side_effect=GemmaLayerError("SLM offline"),
-        ), patch(
-            "vaultproxy.vault.run_gemma_detection",
-            side_effect=GemmaLayerError("SLM offline"),
         ):
             with patch("httpx.AsyncClient.send") as mock_send:
                 payload = {
@@ -358,7 +355,7 @@ def test_e2e_tool_calls_and_image_url_unmasked_leak(client):
         content=json.dumps({"choices": []}).encode("utf-8"),
     )
 
-    with patch.object(settings, "GEMMA_BACKEND", "off"), patch.object(settings, "MASK_SCOPE", "deep"):
+    with patch.object(settings, "GEMMA_BACKEND", "off"):
         with patch("httpx.AsyncClient.send", new_callable=AsyncMock) as mock_send:
             mock_send.return_value = mock_resp
 

@@ -9,8 +9,14 @@ from openai import OpenAI
 from vaultproxy.config import settings
 from vaultproxy.detectors import Span
 from vaultproxy.gemma_layer import GemmaLayerError
-from vaultproxy.masking import SLM_MAX_COMBINED_CHARS, MaskingEngine
-from vaultproxy.restore import restore_json_text
+from vaultproxy.masking import (
+    SLM_CHUNK_CHARS,
+    SLM_MAX_CHUNKS,
+    MaskingEngine,
+    chunk_combined_text,
+    is_candidate_for_slm,
+)
+from vaultproxy.restore import StreamRestorer, process_sse_stream, restore_json_text, restore_text
 from vaultproxy.server import app
 from vaultproxy.vault import RequestVault
 
@@ -20,26 +26,19 @@ def client():
     return TestClient(app)
 
 
-def test_restorer_json_escaping():
-    vault = RequestVault()
-    secret = 'user"name\nwithnewline\\andbackslash'
-    vault.get_or_create_token(secret, "PAN")
-    raw_text = '{"pan": "[PAN_1]"}'
-    restored = restore_json_text(raw_text, vault)
-    parsed = json.loads(restored)
-    assert parsed["pan"] == secret
+# -------------------------------------------------------------------
+# 2a. Structural Allowlist Test
+# -------------------------------------------------------------------
+def test_allowlist_comprehensive_scanning(client):
+    fake_pan = "ABCPB1234F"
+    fake_aadhaar = "367598341203"
+    fake_mobile = "9876543210"
 
-
-def test_structural_allowlist_scanning(client):
     mock_resp = httpx.Response(
         200,
         headers={"content-type": "application/json"},
         content=json.dumps({"choices": [{"message": {"role": "assistant", "content": "Ok"}}]}).encode("utf-8"),
     )
-
-    fake_pan = "ABCPB1234F"
-    fake_aadhaar = "367598341203"
-    fake_mobile = "9876543210"
 
     payload = {
         "model": "gpt-4o",
@@ -57,7 +56,7 @@ def test_structural_allowlist_scanning(client):
                 "type": "function",
                 "function": {
                     "name": "lookup",
-                    "description": f"Lookup PAN {fake_pan}",
+                    "description": f"Lookup PAN {fake_pan} and Aadhaar {fake_aadhaar}",
                     "parameters": {
                         "properties": {
                             "id": {"type": "string", "description": fake_pan},
@@ -85,42 +84,58 @@ def test_structural_allowlist_scanning(client):
             assert sent_body["model"] == "gpt-4o"
             assert sent_body["messages"][1]["role"] == "user"
 
-            # Ensure metadata, user, and tool schema strings were ALL scanned and masked
-            assert fake_pan not in json.dumps(sent_body)
-            assert fake_aadhaar not in json.dumps(sent_body)
-            assert fake_mobile not in json.dumps(sent_body)
-            assert "[PAN_" in json.dumps(sent_body)
-            assert "[AADHAAR_" in json.dumps(sent_body)
-            assert "[MOBILE_" in json.dumps(sent_body)
+            # Assert NONE of the raw PII strings reach upstream
+            body_str = json.dumps(sent_body)
+            assert fake_pan not in body_str
+            assert fake_aadhaar not in body_str
+            assert fake_mobile not in body_str
+            assert "[PAN_" in body_str
+            assert "[AADHAAR_" in body_str
+            assert "[MOBILE_" in body_str
 
 
-def test_slm_layer_single_call_and_cap():
+# -------------------------------------------------------------------
+# 2b & 4. SLM Candidate Filter, One Call, Chunking & Boundaries
+# -------------------------------------------------------------------
+def test_slm_candidate_filter_and_chunking():
     import anyio
+
+    # Candidate filter rules
+    assert is_candidate_for_slm("abc") is False  # < 4 chars
+    assert is_candidate_for_slm("12345") is False  # no letters
+    assert is_candidate_for_slm("0123456789abcdef0123456789abcdef") is False  # hex
+    assert is_candidate_for_slm("QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo=") is False  # base64
+    assert is_candidate_for_slm("This is a valid prompt string for SLM.") is True
 
     async def _test():
         vault = RequestVault()
         engine = MaskingEngine(vault)
 
-        # 40 string fields + 20,000 char tools list (using prose text with spaces so it is not mistaken for base64)
-        large_tools = [{"type": "function", "function": {"name": f"fn_{i}", "description": "This is a detailed description of tool with spaces " * 15}} for i in range(40)]
-
+        # 40 string fields + 20,000 char tools list (within 4 chunks of 6000 chars)
+        large_tools = [
+            {"type": "function", "function": {"name": f"fn_{i}", "description": "Detailed tool description with words " * 15}}
+            for i in range(40)
+        ]
         payload = {
             "model": "gpt-4o",
-            "messages": [{"role": "user", "content": "Test text"}],
+            "messages": [{"role": "user", "content": "Test prompt text"}],
             "tools": large_tools,
         }
 
         with patch("vaultproxy.masking.run_gemma_detection", new_callable=AsyncMock) as mock_gemma:
             mock_gemma.return_value = ([], False, True)
 
-            # 1 call under cap (approx 21,000 chars <= SLM_MAX_COMBINED_CHARS = 50000)
-            res_payload, degraded, gemma_used = await engine.mask_payload(payload, scope="deep")
-            assert mock_gemma.call_count == 1
+            # Execution under chunk limit (requires ~4 chunks <= SLM_MAX_CHUNKS)
+            res_payload, degraded, gemma_used = await engine.mask_payload(payload)
+            assert mock_gemma.call_count <= SLM_MAX_CHUNKS
             assert degraded is False
             assert gemma_used is True
 
-        # Now test when cap is exceeded (>50000 chars)
-        huge_tools = [{"type": "function", "function": {"name": f"fn_{i}", "description": "Exceeding cap text content with spaces " * 50}} for i in range(50)]
+        # Test exceeding max chunks (>4 chunks)
+        huge_tools = [
+            {"type": "function", "function": {"name": f"fn_{i}", "description": "Exceeding chunk text content with words " * 50}}
+            for i in range(50)
+        ]
         huge_payload = {
             "model": "gpt-4o",
             "messages": [{"role": "user", "content": "Test text"}],
@@ -130,17 +145,53 @@ def test_slm_layer_single_call_and_cap():
         with patch("vaultproxy.masking.run_gemma_detection", new_callable=AsyncMock) as mock_gemma:
             mock_gemma.return_value = ([], False, True)
             with patch.object(settings, "STRICT_MODE", False):
-                _, degraded, _ = await engine.mask_payload(huge_payload, scope="deep")
+                _, degraded, _ = await engine.mask_payload(huge_payload)
                 assert degraded is True
 
             with patch.object(settings, "STRICT_MODE", True):
                 with pytest.raises(GemmaLayerError):
-                    await engine.mask_payload(huge_payload, scope="deep")
+                    await engine.mask_payload(huge_payload)
 
     anyio.run(_test)
 
 
-def test_streaming_parallel_tools_and_resiliency(client):
+def test_slm_chunk_boundary_cross_detection():
+    import anyio
+
+    async def _test():
+        vault = RequestVault()
+        engine = MaskingEngine(vault)
+
+        # Create text exceeding single chunk (6000 chars)
+        part1 = "Some context text. " * 300  # ~5700 chars
+        secret_name = "Rajesh Sharma"
+        part2 = f" User name is {secret_name}. " + "More text. " * 50
+
+        payload = {
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": part1 + part2}],
+        }
+
+        async def mock_chunk_detect(chunk_text: str):
+            spans = []
+            idx = chunk_text.find(secret_name)
+            if idx != -1:
+                spans.append(Span(start=idx, end=idx + len(secret_name), type="NAME", source="gemma", score=1.0))
+            return spans, False, True
+
+        with patch("vaultproxy.masking.run_gemma_detection", side_effect=mock_chunk_detect):
+            res_payload, degraded, gemma_used = await engine.mask_payload(payload)
+            masked_text = res_payload["messages"][1]["content"]
+            assert secret_name not in masked_text
+            assert "[NAME_1]" in masked_text
+
+    anyio.run(_test)
+
+
+# -------------------------------------------------------------------
+# 2c. Streaming Parallel Tools, Errors & Cancellation Exit Paths
+# -------------------------------------------------------------------
+def test_streaming_parallel_tools_resiliency_exit_paths(client):
     chunk1 = json.dumps({"choices": [
         {"index": 0, "delta": {
             "tool_calls": [
@@ -158,7 +209,7 @@ def test_streaming_parallel_tools_and_resiliency(client):
         }}
     ]})
 
-    sse_chunks = [f"data: {chunk1}\n\n", f"data: {chunk2}\n\n", "data: [DONE]\n\n"]
+    sse_chunks = [": keepalive\n\n", f"data: {chunk1}\n\n", f"data: {chunk2}\n\n", "data: [DONE]\n\n"]
     mock_resp = httpx.Response(
         200,
         headers={"content-type": "text/event-stream"},
@@ -179,7 +230,40 @@ def test_streaming_parallel_tools_and_resiliency(client):
             assert "9876543210" in resp.text
             assert "ABCPB1234F" in resp.text
 
+    # Mid-stream error & disconnect exit paths test
+    import anyio
 
+    async def _test_generator_exit():
+        vault = RequestVault()
+        vault.get_or_create_token("9876543210", "MOBILE")
+
+        async def mock_stream_bytes():
+            yield f'data: {json.dumps({"choices": [{"index": 0, "delta": {"content": "Partial token [MOB"}}]})}\n\n'.encode("utf-8")
+            raise httpx.ReadError("Mid-stream disconnect")
+
+        mock_upstream = AsyncMock()
+        mock_upstream.headers = {"content-type": "text/event-stream"}
+        mock_upstream.status_code = 200
+        mock_upstream.aiter_bytes = mock_stream_bytes
+        mock_upstream.aclose = AsyncMock()
+        mock_client = AsyncMock()
+        mock_client.aclose = AsyncMock()
+
+        gen = process_sse_stream(mock_upstream, mock_client, vault, "gpt-4o")
+        with pytest.raises(httpx.ReadError):
+            async for _ in gen:
+                pass
+
+        # Verify exit path cleanup: upstream and client closed, buffers flushed
+        mock_upstream.aclose.assert_called_once()
+        mock_client.aclose.assert_called_once()
+
+    anyio.run(_test_generator_exit)
+
+
+# -------------------------------------------------------------------
+# 2d. Official OpenAI Python SDK Contract Test Suite
+# -------------------------------------------------------------------
 def test_openai_sdk_full_contract_suite(client):
     complex_secret = 'user"name\nwithnewline\\andbackslash'
     pan_val = "ABCPB1234F"
@@ -303,7 +387,66 @@ def test_openai_sdk_full_contract_suite(client):
     assert pan_val in n2_comp.choices[1].message.content
 
 
-def test_embeddings_token_ids_and_warning_header(client):
+# -------------------------------------------------------------------
+# 2e. JSON Escaping for Quotes, Backslashes, and Newlines
+# -------------------------------------------------------------------
+def test_json_escaping_quotes_backslashes_newlines():
+    vault = RequestVault()
+    secret = 'user"name\nwithnewline\\andbackslash'
+    vault.get_or_create_token(secret, "SECRET")
+
+    # Non-stream JSON argument restoration
+    raw_json_arg = '{"secret": "[SECRET_1]"}'
+    restored = restore_json_text(raw_json_arg, vault)
+    parsed = json.loads(restored)
+    assert parsed["secret"] == secret
+
+    # Stream restorer JSON escaping
+    restorer = StreamRestorer(vault, json_escape=True)
+    part1 = restorer.feed('{"secret": "[SEC')
+    part2 = restorer.feed('RET_1]"}')
+    flushed = restorer.flush()
+
+    full_restored = part1 + part2 + flushed
+    parsed_stream = json.loads(full_restored)
+    assert parsed_stream["secret"] == secret
+
+
+# -------------------------------------------------------------------
+# 2f. Default Request Universal Deep Scope (H7)
+# -------------------------------------------------------------------
+def test_default_request_deep_scope(client):
+    mock_resp = httpx.Response(
+        200,
+        headers={"content-type": "application/json"},
+        content=json.dumps({"choices": []}).encode("utf-8"),
+    )
+
+    with patch.object(settings, "GEMMA_BACKEND", "off"), patch.object(settings, "VAULT_PROFILE", "development"):
+        with patch("httpx.AsyncClient.send", new_callable=AsyncMock) as mock_send:
+            mock_send.return_value = mock_resp
+
+            payload = {
+                "model": "gpt-4o",
+                "messages": [{"role": "user", "content": "My phone is 9876543210"}],
+                "metadata": {"user_id": "ABCPB1234F"}
+            }
+
+            resp = client.post("/v1/chat/completions", json=payload)
+            assert resp.status_code == 200
+
+            sent_req = mock_send.call_args[0][0]
+            sent_body = json.loads(sent_req.content.decode("utf-8"))
+
+            # Deep scope applies universally: metadata is masked
+            assert sent_body["messages"][1]["content"] == "My phone is [MOBILE_1]"
+            assert sent_body["metadata"]["user_id"] == "[PAN_1]"
+
+
+# -------------------------------------------------------------------
+# 2g. Embeddings Warning Header & Token-ID Input
+# -------------------------------------------------------------------
+def test_embeddings_warning_and_token_ids(client):
     mock_resp = httpx.Response(
         200,
         headers={"content-type": "application/json"},
@@ -329,28 +472,117 @@ def test_embeddings_token_ids_and_warning_header(client):
                 assert "Token ID embeddings input cannot be inspected" in resp_prod.json()["error"]["message"]
 
 
-def test_default_development_request_unchanged(client):
-    mock_resp = httpx.Response(
-        200,
-        headers={"content-type": "application/json"},
-        content=json.dumps({"choices": []}).encode("utf-8"),
-    )
+# -------------------------------------------------------------------
+# Additional Coverage Boost Tests for Targets (Item 3)
+# -------------------------------------------------------------------
+def test_vault_methods_coverage():
+    vault = RequestVault()
+    assert vault.mask_text("", []) == ""
+    token1 = vault.get_or_create_token("ABCPB1234F", "PAN")
+    token2 = vault.get_or_create_token("ABCPB1234F", "PAN")
+    assert token1 == token2 == "[PAN_1]"
+    vault.clear()
+    assert len(vault.value_to_token) == 0
 
-    with patch.object(settings, "GEMMA_BACKEND", "off"), patch.object(settings, "VAULT_PROFILE", "development"), patch.object(settings, "MASK_SCOPE", ""):
-        with patch("httpx.AsyncClient.send", new_callable=AsyncMock) as mock_send:
-            mock_send.return_value = mock_resp
 
-            payload = {
-                "model": "gpt-4o",
-                "messages": [{"role": "user", "content": "My phone is 9876543210"}],
-                "metadata": {"user_id": "ABCPB1234F"}
-            }
+def test_restore_and_server_edge_cases(client):
+    # Test restore_text empty inputs
+    vault = RequestVault()
+    assert restore_text("", vault) == ""
+    assert restore_text("Hello", vault) == "Hello"
+    assert restore_json_text("", vault) == ""
 
-            resp = client.post("/v1/chat/completions", json=payload)
-            assert resp.status_code == 200
+    # Test server model list endpoint failure
+    with patch("httpx.AsyncClient.get", side_effect=Exception("Connection refused")):
+        resp = client.get("/v1/models")
+        assert resp.status_code == 503
 
-            sent_req = mock_send.call_args[0][0]
-            sent_body = json.loads(sent_req.content.decode("utf-8"))
+    # Test server production route filter
+    with patch.object(settings, "VAULT_PROFILE", "production"):
+        resp = client.get("/demo/console")
+        assert resp.status_code == 404
 
-            assert sent_body["messages"][1]["content"] == "My phone is [MOBILE_1]"
-            assert sent_body["metadata"]["user_id"] == "ABCPB1234F"
+    # Test server non-text policy block
+    with patch.object(settings, "NON_TEXT_POLICY", "block"):
+        resp = client.post("/v1/chat/completions", json={
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": "http://img"}}]}]
+        })
+        assert resp.status_code == 400
+
+
+def test_restore_sse_uncovered_branches():
+    import anyio
+
+    async def _test():
+        vault = RequestVault()
+        vault.get_or_create_token("9876543210", "MOBILE")
+
+        # 1. Legacy function_call streaming delta
+        # 2. Incomplete token before [DONE] triggering flushed_chunks
+        # 3. Trailing EOF line_buffer without trailing newline
+        chunk_func = json.dumps({
+            "choices": [{
+                "index": 0,
+                "delta": {
+                    "function_call": {"name": "func", "arguments": '{"num": "[MOB'}
+                }
+            }]
+        })
+        chunk_func_end = json.dumps({
+            "choices": [{
+                "index": 0,
+                "delta": {
+                    "function_call": {"arguments": 'ILE_1]"}'}
+                }
+            }]
+        })
+
+        sse_stream = f"data: {chunk_func}\n\ndata: {chunk_func_end}\n\nevent: ping\n\ndata: invalid-json-string\n\ndata: [DONE]"
+
+        async def mock_stream_bytes():
+            yield sse_stream.encode("utf-8")
+
+        mock_upstream = AsyncMock()
+        mock_upstream.headers = {"content-type": "text/event-stream"}
+        mock_upstream.status_code = 200
+        mock_upstream.aiter_bytes = mock_stream_bytes
+        mock_upstream.aclose = AsyncMock()
+        mock_client = AsyncMock()
+        mock_client.aclose = AsyncMock()
+
+        gen = process_sse_stream(mock_upstream, mock_client, vault, "gpt-4o")
+        results = [line async for line in gen]
+        full_res = "".join(results)
+
+        assert "9876543210" in full_res
+        assert "invalid-json-string" in full_res
+        assert "[DONE]" in full_res
+
+        # Test flushed_chunks when token is left in restorer at [DONE]
+        vault2 = RequestVault()
+        vault2.get_or_create_token("9876543210", "MOBILE")
+        chunk_partial = json.dumps({
+            "choices": [{
+                "index": 0,
+                "delta": {"content": "Text with partial [MOB"}
+            }]
+        })
+        sse_partial = f"data: {chunk_partial}\n\ndata: [DONE]\n\n"
+
+        async def mock_stream_partial():
+            yield sse_partial.encode("utf-8")
+
+        mock_upstream2 = AsyncMock()
+        mock_upstream2.headers = {"content-type": "text/event-stream"}
+        mock_upstream2.status_code = 200
+        mock_upstream2.aiter_bytes = mock_stream_partial
+        mock_upstream2.aclose = AsyncMock()
+
+        gen2 = process_sse_stream(mock_upstream2, mock_client, vault2, "gpt-4o")
+        res2 = [l async for l in gen2]
+        full2 = "".join(res2)
+        assert "[MOB" in full2
+
+    anyio.run(_test)
+

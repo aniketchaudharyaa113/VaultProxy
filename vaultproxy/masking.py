@@ -1,5 +1,6 @@
 import json
 import re
+import time
 from typing import Any
 
 from vaultproxy.config import settings
@@ -9,7 +10,8 @@ from vaultproxy.gemma_layer import GemmaLayerError, run_gemma_detection
 from vaultproxy.merge import merge_spans
 from vaultproxy.vault import RequestVault
 
-SLM_MAX_COMBINED_CHARS = 50000
+SLM_CHUNK_CHARS = 6000
+SLM_MAX_CHUNKS = 4
 
 HEX_PATTERN = re.compile(r"^[0-9a-fA-F]{16,}$")
 BASE64_PATTERN = re.compile(r"^[A-Za-z0-9+/=]{32,}$")
@@ -61,94 +63,41 @@ def is_exact_structural_allowlist_position(k: str, path: list[Any]) -> bool:
     return False
 
 
+def chunk_combined_text(
+    text: str, max_chunk_size: int = SLM_CHUNK_CHARS
+) -> list[tuple[int, int, str]]:
+    """Split text into chunks of size <= max_chunk_size at clean boundaries."""
+    chunks: list[tuple[int, int, str]] = []
+    start = 0
+    n = len(text)
+    while start < n:
+        if start + max_chunk_size >= n:
+            chunks.append((start, n, text[start:n]))
+            break
+        end = start + max_chunk_size
+        best = -1
+        for sep in ("\n---\n", "\n\n", "\n", ". ", "? ", "! ", " "):
+            idx = text.rfind(sep, start, end)
+            if idx > start:
+                best = idx + len(sep) if sep in (". ", "? ", "! ") else idx
+                break
+        if best <= start:
+            best = end
+        chunks.append((start, best, text[start:best]))
+        start = best
+    return chunks
+
+
 class MaskingEngine:
-    """Handles request payload masking, structural allowlisting, and SLM batching."""
+    """Handles request payload masking, structural allowlisting, and SLM chunking."""
 
     def __init__(self, vault: RequestVault) -> None:
         self.vault = vault
 
     async def mask_payload(
-        self, body_json: dict[str, Any], scope: str = "messages"
-    ) -> tuple[dict[str, Any], bool, bool]:
-        if scope != "deep":
-            return await self._mask_messages_scope(body_json)
-        return await self._mask_deep_scope(body_json)
-
-    async def _mask_messages_scope(
         self, body_json: dict[str, Any]
     ) -> tuple[dict[str, Any], bool, bool]:
-        res_dict = dict(body_json)
-        any_degraded = False
-        any_gemma_used = False
-
-        if "messages" in res_dict and isinstance(res_dict["messages"], list):
-            system_msg = {
-                "role": "system",
-                "content": "IMPORTANT: Keep all token placeholders formatted like [TYPE_N] (e.g. [PAN_1], [AADHAAR_1]) EXACTLY as they are in your response. Do not modify, translate, or remove them.",
-            }
-            masked_msgs: list[dict[str, Any]] = [system_msg]
-
-            for msg in res_dict["messages"]:
-                new_msg = dict(msg)
-                content = new_msg.get("content")
-                if isinstance(content, str):
-                    rule_spans = run_rule_detectors(content)
-                    gemma_spans, deg, gem = await run_gemma_detection(content)
-                    any_degraded = any_degraded or deg
-                    any_gemma_used = any_gemma_used or gem
-                    all_spans = merge_spans(rule_spans + gemma_spans)
-                    new_msg["content"] = self.vault.mask_text(content, all_spans)
-                elif isinstance(content, list):
-                    masked_list = []
-                    for item in content:
-                        if isinstance(item, dict) and item.get("type") == "text":
-                            txt = item.get("text", "")
-                            rule_spans = run_rule_detectors(txt)
-                            gemma_spans, deg, gem = await run_gemma_detection(txt)
-                            any_degraded = any_degraded or deg
-                            any_gemma_used = any_gemma_used or gem
-                            all_spans = merge_spans(rule_spans + gemma_spans)
-                            item_copy = dict(item)
-                            item_copy["text"] = self.vault.mask_text(txt, all_spans)
-                            masked_list.append(item_copy)
-                        else:
-                            masked_list.append(item)
-                    new_msg["content"] = masked_list
-                masked_msgs.append(new_msg)
-            res_dict["messages"] = masked_msgs
-
-        elif "input" in res_dict:
-            inp = res_dict["input"]
-            if isinstance(inp, str):
-                rule_spans = run_rule_detectors(inp)
-                gemma_spans, deg, gem = await run_gemma_detection(inp)
-                any_degraded = any_degraded or deg
-                any_gemma_used = any_gemma_used or gem
-                res_dict["input"] = self.vault.mask_text(
-                    inp, merge_spans(rule_spans + gemma_spans)
-                )
-            elif isinstance(inp, list):
-                m_list = []
-                for item in inp:
-                    if isinstance(item, str):
-                        rule_spans = run_rule_detectors(item)
-                        gemma_spans, deg, gem = await run_gemma_detection(item)
-                        any_degraded = any_degraded or deg
-                        any_gemma_used = any_gemma_used or gem
-                        m_list.append(
-                            self.vault.mask_text(
-                                item, merge_spans(rule_spans + gemma_spans)
-                            )
-                        )
-                    else:
-                        m_list.append(item)
-                res_dict["input"] = m_list
-
-        return res_dict, any_degraded, any_gemma_used
-
-    async def _mask_deep_scope(
-        self, body_json: dict[str, Any]
-    ) -> tuple[dict[str, Any], bool, bool]:
+        """Deep-walk request payload, scanning every string value except structural allowlist positions."""
         collected_strings: list[tuple[str, list[Any]]] = []
 
         def _collect(obj: Any, path: list[Any]) -> None:
@@ -190,39 +139,54 @@ class MaskingEngine:
             combined_text_parts = [s for _, s in slm_candidates]
             combined_text = "\n---\n".join(combined_text_parts)
 
-            if len(combined_text) > SLM_MAX_COMBINED_CHARS:
+            chunks = chunk_combined_text(combined_text, max_chunk_size=SLM_CHUNK_CHARS)
+            time_budget = settings.GEMMA_TIMEOUT_SECONDS * 2.0
+
+            if len(chunks) > SLM_MAX_CHUNKS:
                 if settings.STRICT_MODE:
                     raise GemmaLayerError(
-                        f"Payload text length ({len(combined_text)}) exceeds SLM inspection cap ({SLM_MAX_COMBINED_CHARS}) in STRICT_MODE."
+                        f"Payload text length requiring {len(chunks)} chunks exceeds maximum allowed chunks ({SLM_MAX_CHUNKS}) in STRICT_MODE."
                     )
                 else:
                     any_degraded = True
             else:
-                gemma_spans, deg, gem = await run_gemma_detection(combined_text)
-                any_degraded = any_degraded or deg
-                any_gemma_used = any_gemma_used or gem
+                start_time = time.monotonic()
+                offsets = []
+                curr_pos = 0
+                for original_idx, text in slm_candidates:
+                    start_pos = curr_pos
+                    end_pos = curr_pos + len(text)
+                    offsets.append((start_pos, end_pos, original_idx, text))
+                    curr_pos = end_pos + 5
 
-                if gemma_spans:
-                    offsets = []
-                    curr_pos = 0
-                    for original_idx, text in slm_candidates:
-                        start_pos = curr_pos
-                        end_pos = curr_pos + len(text)
-                        offsets.append((start_pos, end_pos, original_idx, text))
-                        curr_pos = end_pos + 5
+                for chunk_start, chunk_end, chunk_str in chunks:
+                    if time.monotonic() - start_time > time_budget:
+                        if settings.STRICT_MODE:
+                            raise GemmaLayerError(
+                                "SLM chunking inspection exceeded total time budget in STRICT_MODE."
+                            )
+                        else:
+                            any_degraded = True
+                            break
+
+                    gemma_spans, deg, gem = await run_gemma_detection(chunk_str)
+                    any_degraded = any_degraded or deg
+                    any_gemma_used = any_gemma_used or gem
 
                     for span in gemma_spans:
+                        adj_start = span.start + chunk_start
+                        adj_end = span.end + chunk_start
                         for start_pos, end_pos, orig_idx, text in offsets:
-                            if span.start >= start_pos and span.end <= end_pos:
-                                rel_start = span.start - start_pos
-                                rel_end = span.end - start_pos
+                            if adj_start >= start_pos and adj_end <= end_pos:
+                                rel_start = adj_start - start_pos
+                                rel_end = adj_end - start_pos
                                 slm_spans_per_string[orig_idx].append(
                                     Span(
                                         start=rel_start,
                                         end=rel_end,
                                         type=span.type,
                                         score=span.score,
-                                        source="gemma",
+                                        source=span.source,
                                     )
                                 )
                                 break

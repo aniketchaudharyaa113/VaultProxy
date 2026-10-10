@@ -147,13 +147,13 @@ def test_golden_strict_mode_outcomes():
 
     # Strict mode OFF + Gemma error => 503 fail closed on server endpoint exception
     with patch.object(settings, "STRICT_MODE", False):
-        with patch("vaultproxy.vault.run_gemma_detection", side_effect=GemmaLayerError("Gemma down")):
+        with patch("vaultproxy.masking.run_gemma_detection", side_effect=GemmaLayerError("Gemma down")):
             resp = client.post("/v1/chat/completions", json=payload)
             assert resp.status_code == 503
 
     # Strict mode ON + Gemma error => 503 fail closed
     with patch.object(settings, "STRICT_MODE", True):
-        with patch("vaultproxy.vault.run_gemma_detection", side_effect=GemmaLayerError("Gemma down")):
+        with patch("vaultproxy.masking.run_gemma_detection", side_effect=GemmaLayerError("Gemma down")):
             resp = client.post("/v1/chat/completions", json=payload)
             assert resp.status_code == 503
             assert "VaultProxy fail-closed" in resp.json()["detail"]

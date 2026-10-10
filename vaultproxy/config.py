@@ -24,7 +24,6 @@ class Settings(BaseSettings):
     DEMO_MODE: bool = False
 
     VAULT_PROFILE: str = "development"
-    MASK_SCOPE: str = ""
     NON_TEXT_POLICY: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -37,16 +36,6 @@ class Settings(BaseSettings):
             raise ValueError("VAULT_PROFILE must be 'development' or 'production'")
         return v_lower
 
-    @field_validator("MASK_SCOPE")
-    @classmethod
-    def validate_mask_scope(cls, v: str) -> str:
-        if not v:
-            return ""
-        v_lower = v.lower()
-        if v_lower not in {"messages", "deep"}:
-            raise ValueError("MASK_SCOPE must be 'messages' or 'deep'")
-        return v_lower
-
     @field_validator("NON_TEXT_POLICY")
     @classmethod
     def validate_non_text_policy(cls, v: str) -> str:
@@ -56,12 +45,6 @@ class Settings(BaseSettings):
         if v_lower not in {"allow", "block"}:
             raise ValueError("NON_TEXT_POLICY must be 'allow' or 'block'")
         return v_lower
-
-    @property
-    def effective_mask_scope(self) -> str:
-        if self.MASK_SCOPE:
-            return self.MASK_SCOPE.lower()
-        return "deep" if self.VAULT_PROFILE.lower() == "production" else "messages"
 
     @property
     def effective_non_text_policy(self) -> str:

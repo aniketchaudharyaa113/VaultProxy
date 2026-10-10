@@ -124,7 +124,7 @@ async def embeddings(request: Request) -> Response:
                 token_id_warning = "Token ID embeddings input uninspected"
 
         engine = MaskingEngine(vault)
-        masked_body_json, degraded, gemma_used = await engine.mask_payload(body_json, scope=settings.effective_mask_scope)
+        masked_body_json, degraded, gemma_used = await engine.mask_payload(body_json)
         masked_bytes = json.dumps(masked_body_json).encode("utf-8")
     except Exception as e:
         logger.error(f"Error in embeddings masking: {type(e).__name__}")
@@ -175,7 +175,7 @@ async def chat_completions(request: Request) -> Response:
                 warning_header = "Uninspected non-text content present"
 
         engine = MaskingEngine(vault)
-        masked_body_json, degraded, gemma_used = await engine.mask_payload(body_json, scope=settings.effective_mask_scope)
+        masked_body_json, degraded, gemma_used = await engine.mask_payload(body_json)
 
         from vaultproxy.health import LAST_MASKED_REQUEST
         LAST_MASKED_REQUEST.clear()
