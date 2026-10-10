@@ -283,7 +283,7 @@ def test_stream_timeout_and_long_healthy_stream():
 def test_chunked_body_stream_max_bytes_enforcement(prod_client):
     """Item 4: Enforce MAX_BODY_BYTES while reading body stream incrementally."""
     with patch.object(settings, "MAX_BODY_BYTES", 100):
-        # Exceeding body stream -> 413
+        # 1. Content-Length header exceeding limit -> 413
         oversized_data = json.dumps({"model": "gpt-4", "messages": [{"role": "user", "content": "A" * 200}]}).encode("utf-8")
         resp_over = prod_client.post(
             "/v1/chat/completions",
@@ -292,15 +292,30 @@ def test_chunked_body_stream_max_bytes_enforcement(prod_client):
         )
         assert resp_over.status_code == 413
 
-        # Within limit -> succeeds (or 503 upstream error)
-        valid_data = json.dumps({"model": "gpt-4", "messages": [{"role": "user", "content": "Hi"}]}).encode("utf-8")
+        # 2. Chunked request (generator body without Content-Length) exceeding limit -> 413
+        def chunk_gen_over():
+            yield b'{"model": "gpt-4", "messages": [{"role": "user", "content": "'
+            yield b'A' * 200
+            yield b'"}]}'
+
+        resp_chunked_over = prod_client.post(
+            "/v1/chat/completions",
+            content=chunk_gen_over(),
+            headers={"Authorization": f"Bearer {PROD_TOKEN}", "Content-Type": "application/json"},
+        )
+        assert resp_chunked_over.status_code == 413
+
+        # 3. Chunked request under limit -> 200
+        def chunk_gen_ok():
+            yield b'{"model": "gpt-4", "messages": [{"role": "user", "content": "Hi"}]}'
+
         with patch.object(settings, "GEMMA_BACKEND", "off"):
             mock_upstream = httpx.Response(200, json={"choices": []})
             with patch("httpx.AsyncClient.send", new_callable=AsyncMock) as mock_send:
                 mock_send.return_value = mock_upstream
                 resp_ok = prod_client.post(
                     "/v1/chat/completions",
-                    content=valid_data,
+                    content=chunk_gen_ok(),
                     headers={"Authorization": f"Bearer {PROD_TOKEN}", "Content-Type": "application/json"},
                 )
                 assert resp_ok.status_code == 200
@@ -357,8 +372,10 @@ def test_auth_before_work_short_circuit():
 
         client = TestClient(app)
 
-        with patch("vaultproxy.gemma_layer.run_gemma_detection", new_callable=AsyncMock) as mock_slm, \
-             patch("vaultproxy.masking.MaskingEngine.mask_payload", new_callable=AsyncMock) as mock_mask:
+        with patch("vaultproxy.server.parse_and_validate_request_body", new_callable=AsyncMock) as mock_body, \
+             patch("vaultproxy.gemma_layer.run_gemma_detection", new_callable=AsyncMock) as mock_slm, \
+             patch("vaultproxy.masking.MaskingEngine.mask_payload", new_callable=AsyncMock) as mock_mask, \
+             patch("vaultproxy.detectors.pan.detect_pan") as mock_pan:
 
             # Unauthenticated request with 5MB body
             large_content = "X" * (5 * 1024 * 1024)
@@ -368,8 +385,10 @@ def test_auth_before_work_short_circuit():
             )
 
             assert resp.status_code == 401
+            assert mock_body.call_count == 0
             assert mock_slm.call_count == 0
             assert mock_mask.call_count == 0
+            assert mock_pan.call_count == 0
 
 
 def test_production_startup_refusal_constraints():
