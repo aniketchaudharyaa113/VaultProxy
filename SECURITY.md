@@ -2,10 +2,11 @@
 
 ## Reporting a Vulnerability
 
-The VaultProxy project takes security seriously. If you discover a security vulnerability or potential privacy leak, please report it to us privately before disclosing it publicly.
+The VaultProxy project takes security seriously. If you discover a security vulnerability or potential privacy leak, please report it to us privately via GitHub's private vulnerability reporting feature.
 
 ### How to Report
-- **Email**: Send vulnerability reports to `security@vaultproxy.local` (or file a private security advisory on GitHub if hosted).
+- Please navigate to the **Security** tab of the GitHub repository and submit a **Private Vulnerability Report**.
+- Do NOT open a public issue or discussion for security vulnerabilities.
 - **Include**:
   - Detailed description of the issue.
   - Steps to reproduce or proof-of-concept payload.

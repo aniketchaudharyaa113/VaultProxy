@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vaultproxy"
-version = "0.1.0"
+version = "0.2.0"
 description = "Local-first, OpenAI-compatible privacy proxy for LLM apps focused on Indian data"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
-    { name = "VaultProxy Maintainers" }
+    { name = "Aniket Chaudhary" }
 ]
 dependencies = [
     "fastapi>=0.110.0",
@@ -20,6 +20,13 @@ dependencies = [
     "pydantic-settings>=2.0.0",
     "pyyaml>=6.0.1",
 ]
+
+[project.urls]
+Homepage = "https://github.com/aniketchaudharyaa113/october"
+Repository = "https://github.com/aniketchaudharyaa113/october"
+
+[project.scripts]
+vaultproxy = "vaultproxy.server:main"
 
 [project.optional-dependencies]
 dev = [

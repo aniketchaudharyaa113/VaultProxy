@@ -10,8 +10,8 @@ FORBIDDEN_PHRASES = [
 ]
 
 EXCLUDED_FILES = {
-    "docs/HARDENING_PLAN.md",
-    "docs/PROGRESS.md",
+    "docs/dev/HARDENING_PLAN.md",
+    "docs/dev/PROGRESS.md",
     "CHANGELOG.md",
 }
 

@@ -1,6 +1,36 @@
+# Environments & Secrets
+.env
+.env.*
+!.env.example
 .venv
-.pytest_cache
-.coverage
-htmlcov
-__pycache__
+venv/
+env/
+
+# Caches
+__pycache__/
 *.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Coverage & Output
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Logs & Temporary Files
+*.log
+logs/
+/tmp/
+
+# Build & Package Metadata
+build/
+dist/
+*.egg-info/
+
+# IDE & Local Workspace
+.idea/
+.vscode/
+.antigravityignore
+.worktrees/
