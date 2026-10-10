@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from openai import OpenAI
 
 from vaultproxy.config import settings
+from vaultproxy.detectors import Span
 from vaultproxy.gemma_layer import GemmaLayerError
 from vaultproxy.masking import SLM_MAX_COMBINED_CHARS, MaskingEngine
 from vaultproxy.restore import restore_json_text
@@ -112,16 +113,31 @@ def test_slm_layer_single_call_and_cap():
         with patch("vaultproxy.masking.run_gemma_detection", new_callable=AsyncMock) as mock_gemma:
             mock_gemma.return_value = ([], False, True)
 
+            # 1 call under cap (approx 21,000 chars <= SLM_MAX_COMBINED_CHARS = 50000)
+            res_payload, degraded, gemma_used = await engine.mask_payload(payload, scope="deep")
+            assert mock_gemma.call_count == 1
+            assert degraded is False
+            assert gemma_used is True
+
+        # Now test when cap is exceeded (>50000 chars)
+        huge_tools = [{"type": "function", "function": {"name": f"fn_{i}", "description": "Exceeding cap text content with spaces " * 50}} for i in range(50)]
+        huge_payload = {
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": "Test text"}],
+            "tools": huge_tools,
+        }
+
+        with patch("vaultproxy.masking.run_gemma_detection", new_callable=AsyncMock) as mock_gemma:
+            mock_gemma.return_value = ([], False, True)
             with patch.object(settings, "STRICT_MODE", False):
-                res_payload, degraded, gemma_used = await engine.mask_payload(payload, scope="deep")
+                _, degraded, _ = await engine.mask_payload(huge_payload, scope="deep")
                 assert degraded is True
 
             with patch.object(settings, "STRICT_MODE", True):
                 with pytest.raises(GemmaLayerError):
-                    await engine.mask_payload(payload, scope="deep")
+                    await engine.mask_payload(huge_payload, scope="deep")
 
     anyio.run(_test)
-
 
 
 def test_streaming_parallel_tools_and_resiliency(client):
@@ -164,44 +180,80 @@ def test_streaming_parallel_tools_and_resiliency(client):
             assert "ABCPB1234F" in resp.text
 
 
-def test_openai_sdk_contract_tests(client):
+def test_openai_sdk_full_contract_suite(client):
+    complex_secret = 'user"name\nwithnewline\\andbackslash'
+    pan_val = "ABCPB1234F"
+
+    async def mock_gemma_detect(text: str):
+        spans = []
+        idx = text.find(complex_secret)
+        if idx != -1:
+            spans.append(Span(start=idx, end=idx + len(complex_secret), type="SECRET", source="gemma", score=1.0))
+        return spans, False, True
+
     class LocalTransport(httpx.BaseTransport):
         def handle_request(self, request):
-            req_content = request.content
-            # Upstream mock returns tokens that match the request's masked payload
-            resp_body = {
-                "id": "chatcmpl-123",
-                "object": "chat.completion",
-                "created": 1700000000,
-                "model": "gpt-4o",
-                "choices": [{
-                    "index": 0,
-                    "message": {
-                        "role": "assistant",
-                        "content": "Found [PAN_1]",
-                        "tool_calls": [{
-                            "id": "call_1",
-                            "type": "function",
-                            "function": {
-                                "name": "lookup",
-                                "arguments": '{"pan": "[PAN_1]"}'
-                            }
-                        }]
-                    },
-                    "finish_reason": "stop"
-                }]
-            }
+            req_bytes = request.content
+            req_json = json.loads(req_bytes.decode("utf-8")) if req_bytes else {}
+            is_stream = req_json.get("stream", False)
+            response_format = req_json.get("response_format", {})
+            n_choices = req_json.get("n", 1)
 
-            mock_upstream = httpx.Response(
-                200,
-                headers={"content-type": "application/json"},
-                content=json.dumps(resp_body).encode("utf-8")
-            )
+            if is_stream:
+                chunk1 = json.dumps({"choices": [
+                    {"index": i, "delta": {"content": "Found [PAN_1] in choice "}} for i in range(n_choices)
+                ]})
+                chunk2 = json.dumps({"choices": [
+                    {"index": i, "delta": {"content": f"{i}"}} for i in range(n_choices)
+                ]})
+                sse_data = f"data: {chunk1}\n\n" f"data: {chunk2}\n\n" "data: [DONE]\n\n"
+                mock_upstream = httpx.Response(
+                    200,
+                    headers={"content-type": "text/event-stream"},
+                    content=sse_data.encode("utf-8"),
+                )
+            else:
+                choices = []
+                for i in range(n_choices):
+                    if response_format.get("type") == "json_object":
+                        content_val = '{"secret": "[SECRET_1]", "pan": "[PAN_1]"}'
+                    else:
+                        content_val = "Found [PAN_1]"
 
-            with patch.object(settings, "GEMMA_BACKEND", "off"):
+                    choices.append({
+                        "index": i,
+                        "message": {
+                            "role": "assistant",
+                            "content": content_val,
+                            "tool_calls": [{
+                                "id": f"call_{i}",
+                                "type": "function",
+                                "function": {
+                                    "name": "lookup",
+                                    "arguments": '{"pan": "[PAN_1]", "secret": "[SECRET_1]"}'
+                                }
+                            }]
+                        },
+                        "finish_reason": "stop"
+                    })
+
+                resp_body = {
+                    "id": "chatcmpl-123",
+                    "object": "chat.completion",
+                    "created": 1700000000,
+                    "model": "gpt-4o",
+                    "choices": choices
+                }
+                mock_upstream = httpx.Response(
+                    200,
+                    headers={"content-type": "application/json"},
+                    content=json.dumps(resp_body).encode("utf-8")
+                )
+
+            with patch("vaultproxy.masking.run_gemma_detection", side_effect=mock_gemma_detect):
                 with patch("httpx.AsyncClient.send", new_callable=AsyncMock) as mock_send:
                     mock_send.return_value = mock_upstream
-                    fastapi_resp = client.post(request.url.path, content=req_content, headers=dict(request.headers))
+                    fastapi_resp = client.post(request.url.path, content=req_bytes, headers=dict(request.headers))
                     return httpx.Response(
                         status_code=fastapi_resp.status_code,
                         headers=fastapi_resp.headers,
@@ -210,14 +262,45 @@ def test_openai_sdk_contract_tests(client):
 
     oai_client = OpenAI(api_key="test-key", base_url="http://test/v1", http_client=httpx.Client(transport=LocalTransport()))
 
+    # 1. Normal chat completion with escaped secret value
     comp = oai_client.chat.completions.create(
         model="gpt-4o",
-        messages=[{"role": "user", "content": "My PAN is ABCPB1234F"}]
+        messages=[{"role": "user", "content": f"PAN is {pan_val} and secret is {complex_secret}"}]
     )
-    assert "Found ABCPB1234F" in comp.choices[0].message.content
-    assert comp.choices[0].message.tool_calls[0].function.arguments == '{"pan": "ABCPB1234F"}'
-    args_parsed = json.loads(comp.choices[0].message.tool_calls[0].function.arguments)
-    assert args_parsed["pan"] == "ABCPB1234F"
+    assert pan_val in comp.choices[0].message.content
+    parsed_args = json.loads(comp.choices[0].message.tool_calls[0].function.arguments)
+    assert parsed_args["pan"] == pan_val
+    assert parsed_args["secret"] == complex_secret
+
+    # 2. Streaming completion
+    stream_comp = oai_client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": f"PAN is {pan_val}"}],
+        stream=True
+    )
+    stream_chunks = [c.choices[0].delta.content for c in stream_comp if c.choices and c.choices[0].delta.content]
+    full_streamed = "".join(stream_chunks)
+    assert pan_val in full_streamed
+
+    # 3. JSON mode with quotes, newline, backslash in restored value
+    json_comp = oai_client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": f"PAN is {pan_val} and secret is {complex_secret}"}],
+        response_format={"type": "json_object"}
+    )
+    parsed_json_body = json.loads(json_comp.choices[0].message.content)
+    assert parsed_json_body["pan"] == pan_val
+    assert parsed_json_body["secret"] == complex_secret
+
+    # 4. Multi-choice n=2
+    n2_comp = oai_client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": f"PAN is {pan_val}"}],
+        n=2
+    )
+    assert len(n2_comp.choices) == 2
+    assert pan_val in n2_comp.choices[0].message.content
+    assert pan_val in n2_comp.choices[1].message.content
 
 
 def test_embeddings_token_ids_and_warning_header(client):
@@ -233,12 +316,12 @@ def test_embeddings_token_ids_and_warning_header(client):
 
             resp_str = client.post("/v1/embeddings", json={"model": "text-emb", "input": "Hello"})
             assert resp_str.status_code == 200
-            assert resp_str.headers.get("x-vault-warning") == "Embeddings of masked text are not comparable across requests"
+            assert "Embeddings of masked text are not comparable across requests" in resp_str.headers.get("x-vault-warning", "")
 
             with patch.object(settings, "VAULT_PROFILE", "development"):
                 resp_dev = client.post("/v1/embeddings", json={"model": "text-emb", "input": [101, 2045]})
                 assert resp_dev.status_code == 200
-                assert resp_dev.headers.get("x-vault-warning") == "Token ID embeddings input uninspected"
+                assert "Token ID embeddings input uninspected" in resp_dev.headers.get("x-vault-warning", "")
 
             with patch.object(settings, "VAULT_PROFILE", "production"):
                 resp_prod = client.post("/v1/embeddings", json={"model": "text-emb", "input": [101, 2045]})

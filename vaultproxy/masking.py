@@ -9,7 +9,7 @@ from vaultproxy.gemma_layer import GemmaLayerError, run_gemma_detection
 from vaultproxy.merge import merge_spans
 from vaultproxy.vault import RequestVault
 
-SLM_MAX_COMBINED_CHARS = 10000
+SLM_MAX_COMBINED_CHARS = 50000
 
 HEX_PATTERN = re.compile(r"^[0-9a-fA-F]{16,}$")
 BASE64_PATTERN = re.compile(r"^[A-Za-z0-9+/=]{32,}$")
@@ -45,14 +45,11 @@ def is_exact_structural_allowlist_position(k: str, path: list[Any]) -> bool:
     Allowed positions to skip:
     1. Top-level payload["model"]
     2. Message role: messages[i]["role"]
-    3. Tool type: tools[i]["type"]
-    4. Multimodal content part type: messages[i]["content"][j]["type"]
+    3. Multimodal content part type: messages[i]["content"][j]["type"]
     """
     if len(path) == 0 and k == "model":
         return True
     if len(path) == 2 and path[0] == "messages" and k == "role":
-        return True
-    if len(path) == 2 and path[0] == "tools" and k == "type":
         return True
     if (
         len(path) == 4

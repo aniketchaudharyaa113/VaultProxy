@@ -1,0 +1,9 @@
+# VaultProxy Progress Log
+
+| Phase | Date | Commit ID | Tests | Coverage | Net Lines | New Settings | Open Risks |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Phase 0 / 0.5 | 2026-10-09 | c5f1bf1 | 78 | 85% | +450 | - | Baseline characterization tests |
+| Phase 1 | 2026-10-09 | 1e5852a | 92 | 86% | +120 | GEMMA_AUTODISCOVER | Ollama downtime handling |
+| Phase 1.5 | 2026-10-09 | 6bcee62 | 104 | 87% | +95 | - | Queue timeouts under high concurrency |
+| Phase 2 | 2026-10-10 | d331704 | 121 | 72% | +310 | VAULT_PROFILE, MASK_SCOPE, NON_TEXT_POLICY | Phase 2.5 hardening items pending verification |
+| Phase 2.5 | 2026-10-10 | 452f7fb | 121 | 72% | +92 | - | Payloads >50k chars degrade or return 503 in strict mode |

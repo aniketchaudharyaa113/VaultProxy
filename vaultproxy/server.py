@@ -68,7 +68,15 @@ def restore_json_payload(obj: Any, vault: RequestVault, parent_key: str = "") ->
     elif isinstance(obj, list):
         return [restore_json_payload(item, vault, parent_key) for item in obj]
     elif isinstance(obj, str):
-        return restore_json_text(obj, vault) if parent_key == "arguments" else restore_text(obj, vault)
+        if parent_key == "arguments":
+            return restore_json_text(obj, vault)
+        if parent_key == "content" and obj.strip().startswith("{") and obj.strip().endswith("}"):
+            try:
+                json.loads(obj)
+                return restore_json_text(obj, vault)
+            except Exception:
+                pass
+        return restore_text(obj, vault)
     return obj
 
 
@@ -132,7 +140,11 @@ async def embeddings(request: Request) -> Response:
             resp = await client.post(url, headers=headers, content=masked_bytes)
             resp_headers = {k: v for k, v in resp.headers.items() if k.lower() not in HOP_BY_HOP_HEADERS}
             resp_headers["x-vault-report"] = report_header
-            resp_headers["x-vault-warning"] = token_id_warning or "Embeddings of masked text are not comparable across requests"
+            resp_headers["x-vault-warning"] = (
+                f"{token_id_warning}; Embeddings of masked text are not comparable across requests"
+                if token_id_warning
+                else "Embeddings of masked text are not comparable across requests"
+            )
             return Response(content=resp.content, status_code=resp.status_code, headers=resp_headers, media_type=resp.headers.get("content-type"))
     except Exception as e:
         logger.error(f"Upstream embeddings error: {type(e).__name__}")
