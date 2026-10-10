@@ -192,7 +192,11 @@ def _heuristic_gemma_fallback(text: str) -> list[Span]:
     """Smart fallback extractor for PERSON & ADDRESS when Ollama/Gemini is offline.
 
     H2: Labels spans source="heuristic".
+    Disabled in production profile.
     """
+    if settings.VAULT_PROFILE.lower() == "production":
+        return []
+
     spans: list[Span] = []
 
     person_patterns = [

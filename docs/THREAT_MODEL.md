@@ -26,3 +26,12 @@ VaultProxy is a local privacy proxy designed to reduce the risk of accidental PI
    - The upstream cloud LLM provider still receives and logs the masked prompt containing token placeholders and unmasked background text.
 6. **Proxy Outage on Strict Fail-Closed**:
    - In `STRICT_MODE=true`, any SLM layer failure, queue timeout, or unhandled exception halts request execution and returns HTTP 503, intentionally choosing availability loss over privacy risk.
+
+---
+
+## 4. Network & Transport Security Boundary
+- **Plain HTTP Protocol**: VaultProxy speaks plain HTTP and does not terminate TLS natively.
+- **Deployment Requirement**: VaultProxy MUST run on `127.0.0.1` or behind a TLS-terminating reverse proxy (e.g., Nginx, Caddy, HAProxy).
+- **Clear-Text Token Exposure**: If deployed without a TLS-terminating reverse proxy on non-loopback network interfaces, client authentication tokens (`VAULT_AUTH_TOKEN`) and request payloads travel in clear text over the network.
+- **Large Input Constraints**: Prompts exceeding the local SLM input capacity limit (24,000 characters) are refused with HTTP 503 in strict mode (`STRICT_MODE=true`) or processed using rules-only deterministic masking in non-strict mode (`STRICT_MODE=false`).
+

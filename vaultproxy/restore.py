@@ -231,6 +231,33 @@ async def process_sse_stream(
                             yield f"data: {json.dumps(final_chunk)}\n\n"
                     yield "data: [DONE]\n\n"
 
+    except Exception as exc:
+        flushed_chunks = []
+        for key, r in restorers.items():
+            flushed_val = r.flush()
+            if flushed_val:
+                flushed_chunks.append((key, flushed_val))
+        if flushed_chunks:
+            for (c_idx, _, field), val in flushed_chunks:
+                flushed_delta: dict[str, Any] = (
+                    {"content": val} if field == "content" else {}
+                )
+                final_chunk = {
+                    "id": "chatcmpl-restored",
+                    "object": "chat.completion.chunk",
+                    "created": 1700000000,
+                    "model": model_name,
+                    "choices": [
+                        {
+                            "index": c_idx,
+                            "delta": flushed_delta,
+                            "finish_reason": None,
+                        }
+                    ],
+                }
+                yield f"data: {json.dumps(final_chunk)}\n\n"
+        yield f"data: {json.dumps({'error': {'message': f'Stream error or timeout: {type(exc).__name__}', 'type': 'stream_error'}})}\n\n"
+
     finally:
         for r in restorers.values():
             r.flush()

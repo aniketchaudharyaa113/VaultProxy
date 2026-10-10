@@ -57,6 +57,17 @@ HOP_BY_HOP_HEADERS = {
     "upgrade",
 }
 
+CLIENT_HEADER_ALLOWLIST = {
+    "content-type",
+    "accept",
+    "user-agent",
+    "openai-organization",
+    "openai-project",
+    "openai-beta",
+}
+
+RESPONSE_DROP_HEADERS = HOP_BY_HOP_HEADERS | {"set-cookie"}
+
 PRODUCTION_ALLOWED_ROUTES = {
     ("POST", "/v1/chat/completions"),
     ("POST", "/v1/embeddings"),
@@ -74,11 +85,10 @@ def get_httpx_client() -> httpx.AsyncClient:
     global _httpx_client
     if _httpx_client is None or _httpx_client.is_closed:
         timeout_cfg = httpx.Timeout(
-            settings.REQUEST_TIMEOUT_SECONDS,
-            connect=10.0,
+            connect=settings.REQUEST_TIMEOUT_SECONDS,
             read=settings.REQUEST_TIMEOUT_SECONDS,
-            write=10.0,
-            pool=10.0,
+            write=settings.REQUEST_TIMEOUT_SECONDS,
+            pool=settings.REQUEST_TIMEOUT_SECONDS,
         )
         _httpx_client = httpx.AsyncClient(timeout=timeout_cfg, verify=True)
     return _httpx_client
@@ -93,7 +103,6 @@ def get_concurrency_semaphore() -> asyncio.Semaphore:
 
 @app.on_event("startup")
 async def startup_event() -> None:
-    settings.check_production_constraints()
     logger.info(
         f"VaultProxy starting up. Profile: {settings.VAULT_PROFILE}. "
         "Maximum SLM input size: 24,000 chars (4 chunks x 6,000 chars with 300-char overlap). "
@@ -127,13 +136,21 @@ async def production_route_filter(request: Request, call_next: Any) -> Response:
 
 def clean_headers(request_headers: Any) -> dict[str, str]:
     headers = {
-        k: v
+        k.lower(): v
         for k, v in request_headers.items()
-        if k.lower() not in HOP_BY_HOP_HEADERS and k.lower() != "authorization"
+        if k.lower() in CLIENT_HEADER_ALLOWLIST
     }
     if settings.UPSTREAM_API_KEY:
         headers["authorization"] = f"Bearer {settings.UPSTREAM_API_KEY}"
     return headers
+
+
+def clean_response_headers(upstream_headers: Any) -> dict[str, str]:
+    return {
+        k: v
+        for k, v in upstream_headers.items()
+        if k.lower() not in RESPONSE_DROP_HEADERS
+    }
 
 
 def restore_json_payload(obj: Any, vault: RequestVault, parent_key: str = "") -> Any:
@@ -170,13 +187,18 @@ async def parse_and_validate_request_body(request: Request) -> tuple[bytes, dict
         except ValueError:
             pass
 
-    body_bytes = await request.body()
-    if len(body_bytes) > settings.MAX_BODY_BYTES:
-        raise HTTPException(
-            status_code=413,
-            detail="Request body size exceeds maximum allowed limit.",
-        )
+    body_chunks = []
+    total_bytes = 0
+    async for chunk in request.stream():
+        total_bytes += len(chunk)
+        if total_bytes > settings.MAX_BODY_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail="Request body size exceeds maximum allowed limit.",
+            )
+        body_chunks.append(chunk)
 
+    body_bytes = b"".join(body_chunks)
     if not body_bytes:
         return b"", {}
 
@@ -249,11 +271,7 @@ async def get_models(request: Request) -> Response:
         res = Response(
             content=resp.content,
             status_code=resp.status_code,
-            headers={
-                k: v
-                for k, v in resp.headers.items()
-                if k.lower() not in HOP_BY_HOP_HEADERS
-            },
+            headers=clean_response_headers(resp.headers),
             media_type=resp.headers.get("content-type"),
         )
     except Exception as e:
@@ -378,11 +396,7 @@ async def embeddings(request: Request) -> Response:
         try:
             resp = await client.post(url, headers=headers, content=masked_bytes)
             status_code = resp.status_code
-            resp_headers = {
-                k: v
-                for k, v in resp.headers.items()
-                if k.lower() not in HOP_BY_HOP_HEADERS
-            }
+            resp_headers = clean_response_headers(resp.headers)
             resp_headers["x-vault-report"] = report_header
             resp_headers["x-vault-warning"] = (
                 f"{token_id_warning}; Embeddings of masked text are not comparable across requests"
@@ -525,11 +539,7 @@ async def chat_completions(request: Request) -> Response:
             upstream_resp = await client.send(req, stream=True)
             status_code = upstream_resp.status_code
 
-            resp_headers = {
-                k: v
-                for k, v in upstream_resp.headers.items()
-                if k.lower() not in HOP_BY_HOP_HEADERS
-            }
+            resp_headers = clean_response_headers(upstream_resp.headers)
             resp_headers["x-vault-report"] = report_header
             if warning_header:
                 resp_headers["x-vault-warning"] = warning_header
@@ -588,6 +598,6 @@ async def chat_completions(request: Request) -> Response:
 
 
 if __name__ == "__main__":
-    import uvicorn  # type: ignore[import-not-found]
+    import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8000)

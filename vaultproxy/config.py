@@ -1,4 +1,4 @@
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -76,7 +76,8 @@ class Settings(BaseSettings):
             raise ValueError("GEMMA_MODEL cannot be empty.")
         return v.strip()
 
-    def check_production_constraints(self) -> None:
+    @model_validator(mode="after")
+    def check_production_constraints(self) -> "Settings":
         """Validate startup production rules."""
         if self.VAULT_PROFILE.lower() == "production":
             if self.DEMO_MODE:
@@ -85,7 +86,7 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "VAULT_AUTH_TOKEN is required in production profile and must be at least 24 characters long."
                 )
+        return self
 
 
 settings = Settings()
-settings.check_production_constraints()

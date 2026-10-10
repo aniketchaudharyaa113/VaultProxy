@@ -274,9 +274,12 @@ def test_streaming_parallel_tools_resiliency_exit_paths(client):
         mock_client.aclose = AsyncMock()
 
         gen = process_sse_stream(mock_upstream, mock_client, vault, "gpt-4o")
-        with pytest.raises(httpx.ReadError):
-            async for _ in gen:
-                pass
+        items = []
+        async for item in gen:
+            items.append(item)
+
+        assert len(items) >= 2
+        assert any("stream_error" in item for item in items)
 
         # Verify exit path cleanup: upstream and client closed, buffers flushed
         mock_upstream.aclose.assert_called_once()

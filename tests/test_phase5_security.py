@@ -185,3 +185,235 @@ def test_log_privacy_zero_sensitive_data_leakage(caplog):
                     headers={"Content-Type": "application/json"},
                 )
                 assert fake_pan not in err_resp.text
+
+
+def test_unexpected_masking_exceptions_fail_closed_with_503(caplog):
+    """Test that unexpected errors inside masking step, vault, or SLM chunk/merge step return HTTP 503 and forward nothing upstream."""
+    client = TestClient(app)
+    fake_pan = "ABCPB1234F"
+    payload = {"model": "gpt-4", "messages": [{"role": "user", "content": f"PAN is {fake_pan}"}]}
+
+    with patch.object(settings, "GEMMA_BACKEND", "off"):
+        # 1. Error inside masking step (MaskingEngine.mask_payload)
+        with patch("vaultproxy.masking.MaskingEngine.mask_payload", side_effect=RuntimeError("Unexpected masking failure")):
+            with patch("httpx.AsyncClient.send", new_callable=AsyncMock) as mock_send:
+                caplog.clear()
+                resp = client.post("/v1/chat/completions", json=payload)
+                assert resp.status_code == 503
+                assert mock_send.call_count == 0
+                assert fake_pan not in resp.text
+                assert fake_pan not in caplog.text
+
+        # 2. Error inside vault (RequestVault.mask_text)
+        with patch("vaultproxy.vault.RequestVault.mask_text", side_effect=RuntimeError("Unexpected vault error")):
+            with patch("httpx.AsyncClient.send", new_callable=AsyncMock) as mock_send:
+                caplog.clear()
+                resp = client.post("/v1/chat/completions", json=payload)
+                assert resp.status_code == 503
+                assert mock_send.call_count == 0
+                assert fake_pan not in resp.text
+                assert fake_pan not in caplog.text
+
+        # 3. Error inside merge step (merge_spans)
+        with patch("vaultproxy.masking.merge_spans", side_effect=RuntimeError("Unexpected merge error")):
+            with patch("httpx.AsyncClient.send", new_callable=AsyncMock) as mock_send:
+                caplog.clear()
+                resp = client.post("/v1/chat/completions", json=payload)
+                assert resp.status_code == 503
+                assert mock_send.call_count == 0
+                assert fake_pan not in resp.text
+                assert fake_pan not in caplog.text
+
+
+def test_stream_timeout_and_long_healthy_stream():
+    """Item 3: REQUEST_TIMEOUT_SECONDS resilience - long healthy streams succeed, silent streams end cleanly with error event."""
+    import anyio
+    from vaultproxy.restore import process_sse_stream
+    from vaultproxy.vault import RequestVault
+
+    async def _test():
+        vault = RequestVault()
+        tok = vault.get_or_create_token("ABCPB1234F", "PAN")
+
+        # 1. Healthy stream producing chunks continuously for longer than timeout
+        async def healthy_chunks():
+            for i in range(5):
+                chunk_json = json.dumps({"choices": [{"index": 0, "delta": {"content": f"Chunk {i} with {tok} "}}]})
+                yield f"data: {chunk_json}\n\n".encode("utf-8")
+            yield b"data: [DONE]\n\n"
+
+        mock_resp = AsyncMock()
+        mock_resp.headers = {"content-type": "text/event-stream"}
+        mock_resp.status_code = 200
+        mock_resp.aiter_bytes = healthy_chunks
+        mock_resp.aclose = AsyncMock()
+        mock_client = AsyncMock()
+        mock_client.aclose = AsyncMock()
+
+        gen = process_sse_stream(mock_resp, mock_client, vault, "gpt-4o")
+        results = [chunk async for chunk in gen]
+        full_text = "".join(results)
+
+        assert "ABCPB1234F" in full_text
+        assert mock_resp.aclose.called
+
+        # 2. Mock stream that goes silent / raises ReadTimeout mid-stream
+        async def silent_stream():
+            chunk_json = json.dumps({"choices": [{"index": 0, "delta": {"content": f"Partial {tok}"}}]})
+            yield f"data: {chunk_json}\n\n".encode("utf-8")
+            raise httpx.ReadTimeout("Stream idle timeout exceeded")
+
+        mock_resp_silent = AsyncMock()
+        mock_resp_silent.headers = {"content-type": "text/event-stream"}
+        mock_resp_silent.status_code = 200
+        mock_resp_silent.aiter_bytes = silent_stream
+        mock_resp_silent.aclose = AsyncMock()
+
+        gen_silent = process_sse_stream(mock_resp_silent, mock_client, vault, "gpt-4o")
+        results_silent = [chunk async for chunk in gen_silent]
+        full_silent_text = "".join(results_silent)
+
+        assert "ABCPB1234F" in full_silent_text
+        assert "stream_error" in full_silent_text
+        assert mock_resp_silent.aclose.called
+
+    anyio.run(_test)
+
+
+def test_chunked_body_stream_max_bytes_enforcement(prod_client):
+    """Item 4: Enforce MAX_BODY_BYTES while reading body stream incrementally."""
+    with patch.object(settings, "MAX_BODY_BYTES", 100):
+        # Exceeding body stream -> 413
+        oversized_data = json.dumps({"model": "gpt-4", "messages": [{"role": "user", "content": "A" * 200}]}).encode("utf-8")
+        resp_over = prod_client.post(
+            "/v1/chat/completions",
+            content=oversized_data,
+            headers={"Authorization": f"Bearer {PROD_TOKEN}", "Content-Type": "application/json"},
+        )
+        assert resp_over.status_code == 413
+
+        # Within limit -> succeeds (or 503 upstream error)
+        valid_data = json.dumps({"model": "gpt-4", "messages": [{"role": "user", "content": "Hi"}]}).encode("utf-8")
+        with patch.object(settings, "GEMMA_BACKEND", "off"):
+            mock_upstream = httpx.Response(200, json={"choices": []})
+            with patch("httpx.AsyncClient.send", new_callable=AsyncMock) as mock_send:
+                mock_send.return_value = mock_upstream
+                resp_ok = prod_client.post(
+                    "/v1/chat/completions",
+                    content=valid_data,
+                    headers={"Authorization": f"Bearer {PROD_TOKEN}", "Content-Type": "application/json"},
+                )
+                assert resp_ok.status_code == 200
+
+
+def test_header_forwarding_allowlist_and_response_filtering(prod_client):
+    """Item 5: Client header allowlisting and response header denylisting."""
+    mock_resp = httpx.Response(
+        200,
+        headers={
+            "content-type": "application/json",
+            "set-cookie": "session=secret_cookie_123",
+            "connection": "close",
+            "x-custom-upstream": "custom_val",
+        },
+        content=json.dumps({"data": []}).encode("utf-8"),
+    )
+
+    with patch.object(settings, "UPSTREAM_API_KEY", "secret_upstream_key_123"):
+        with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = mock_resp
+
+            client_headers = {
+                "Authorization": f"Bearer {PROD_TOKEN}",
+                "User-Agent": "TestClient/1.0",
+                "Cookie": "user_session=bad_cookie",
+                "X-User-Email": "attacker@example.com",
+                "X-Forwarded-For": "10.0.0.1",
+                "OpenAI-Organization": "org-12345",
+            }
+
+            resp = prod_client.get("/v1/models", headers=client_headers)
+            assert resp.status_code == 200
+
+            # Verify client request headers passed upstream
+            sent_req_headers = mock_get.call_args[1]["headers"]
+            assert "user-agent" in sent_req_headers
+            assert "openai-organization" in sent_req_headers
+            assert "cookie" not in sent_req_headers
+            assert "x-user-email" not in sent_req_headers
+            assert "x-forwarded-for" not in sent_req_headers
+            # Verify upstream API key was used
+            assert sent_req_headers["authorization"] == "Bearer secret_upstream_key_123"
+
+            # Verify client response headers filtered Set-Cookie and connection
+            assert "set-cookie" not in resp.headers
+            assert "connection" not in resp.headers
+
+
+def test_auth_before_work_short_circuit():
+    """Item 6: Unauthenticated request in production profile short-circuits before body, SLM, or detectors."""
+    with patch.object(settings, "VAULT_PROFILE", "production"), \
+         patch.object(settings, "VAULT_AUTH_TOKEN", PROD_TOKEN):
+
+        client = TestClient(app)
+
+        with patch("vaultproxy.gemma_layer.run_gemma_detection", new_callable=AsyncMock) as mock_slm, \
+             patch("vaultproxy.masking.MaskingEngine.mask_payload", new_callable=AsyncMock) as mock_mask:
+
+            # Unauthenticated request with 5MB body
+            large_content = "X" * (5 * 1024 * 1024)
+            resp = client.post(
+                "/v1/chat/completions",
+                json={"model": "gpt-4", "messages": [{"role": "user", "content": large_content}]},
+            )
+
+            assert resp.status_code == 401
+            assert mock_slm.call_count == 0
+            assert mock_mask.call_count == 0
+
+
+def test_production_startup_refusal_constraints():
+    """Item 7: Production startup refusal checks for token, length, and demo mode."""
+    from vaultproxy.config import Settings
+    import os
+
+    with patch.dict(os.environ, {"VAULT_AUTH_TOKEN": "", "DEMO_MODE": "false"}, clear=False):
+        # Missing token -> ValueError mentioning VAULT_AUTH_TOKEN
+        with pytest.raises(ValueError, match="VAULT_AUTH_TOKEN"):
+            Settings(_env_file=None, VAULT_PROFILE="production", VAULT_AUTH_TOKEN="")
+
+    with patch.dict(os.environ, {"VAULT_AUTH_TOKEN": "short_token_123", "DEMO_MODE": "false"}, clear=False):
+        # Short token -> ValueError mentioning VAULT_AUTH_TOKEN
+        with pytest.raises(ValueError, match="VAULT_AUTH_TOKEN"):
+            Settings(_env_file=None, VAULT_PROFILE="production", VAULT_AUTH_TOKEN="short_token_123")
+
+    with patch.dict(os.environ, {"VAULT_AUTH_TOKEN": PROD_TOKEN, "DEMO_MODE": "true"}, clear=False):
+        # DEMO_MODE=true -> ValueError mentioning DEMO_MODE
+        with pytest.raises(ValueError, match="DEMO_MODE"):
+            Settings(_env_file=None, VAULT_PROFILE="production", DEMO_MODE=True, VAULT_AUTH_TOKEN=PROD_TOKEN)
+
+
+def test_heuristic_fallback_disabled_in_production():
+    """Item 7: Heuristic fallback returns empty list in production profile."""
+    from vaultproxy.gemma_layer import _heuristic_gemma_fallback
+
+    with patch.object(settings, "VAULT_PROFILE", "production"):
+        spans = _heuristic_gemma_fallback("My name is Rajesh Sharma residing at Flat 101, Mumbai")
+        assert spans == []
+
+
+def test_readyz_and_metrics_unauthenticated_minimal_or_401(prod_client):
+    """Item 7: /readyz without token returns minimal info, /metrics without token returns 401."""
+    # /readyz unauthenticated -> {"status": "ready"}
+    resp_ready = prod_client.get("/readyz")
+    assert resp_ready.status_code == 200
+    data_ready = resp_ready.json()
+    assert data_ready == {"status": "ready"}
+    assert "slm_backend" not in data_ready
+
+    # /metrics unauthenticated -> 401
+    with patch("vaultproxy.server.METRICS_AVAILABLE", True):
+        resp_metrics = prod_client.get("/metrics")
+        assert resp_metrics.status_code == 401
+
+
