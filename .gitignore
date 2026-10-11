@@ -32,5 +32,4 @@ dist/
 # IDE & Local Workspace
 .idea/
 .vscode/
-.antigravityignore
 .worktrees/

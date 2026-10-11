@@ -115,7 +115,7 @@ def main():
         with open("bench/dataset.json", encoding="utf-8") as f:
             generated_samples = json.load(f)
 
-    # Load held-out dataset
+    # Load held-out datasets
     heldout_samples = []
     if os.path.exists("bench/heldout.jsonl"):
         with open("bench/heldout.jsonl", encoding="utf-8") as f:
@@ -123,14 +123,23 @@ def main():
                 if line.strip():
                     heldout_samples.append(json.loads(line))
 
+    heldout_v2_samples = []
+    if os.path.exists("bench/heldout_v2.jsonl"):
+        with open("bench/heldout_v2.jsonl", encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    heldout_v2_samples.append(json.loads(line))
+
     res_gen = evaluate_set(generated_samples, use_gemma=args.gemma) if generated_samples else None
     res_held = evaluate_set(heldout_samples, use_gemma=args.gemma) if heldout_samples else None
+    res_held_v2 = evaluate_set(heldout_v2_samples, use_gemma=args.gemma) if heldout_v2_samples else None
 
     # Write bench/results.json
     results_json = {
         "mode": mode_str,
         "generated": res_gen,
         "heldout": res_held,
+        "heldout_v2": res_held_v2,
         "metrics": res_gen["metrics"] if res_gen else {},
         "overall": res_gen["overall"] if res_gen else {},
     }
@@ -144,7 +153,7 @@ def main():
     lines.append(f"**Evaluation Mode:** {mode_str}\n")
 
     if res_gen:
-        lines.append("## Generated Test Dataset (40 Samples)\n")
+        lines.append(f"## Generated Test Dataset ({len(generated_samples)} Samples)\n")
         lines.append("| Entity Type | Precision | Recall | F1 Score | TP | FP | FN |")
         lines.append("|---|---|---|---|---|---|---|")
         for etype, m in res_gen["metrics"].items():
@@ -158,7 +167,7 @@ def main():
         lines.append(f"**Mean Latency:** {o['mean_latency_ms']} ms\n")
 
     if res_held:
-        lines.append("## Held-Out Evaluation Dataset (5 Samples)\n")
+        lines.append(f"## Held-Out Evaluation Dataset v1 ({len(heldout_samples)} Samples)\n")
         lines.append("| Entity Type | Precision | Recall | F1 Score | TP | FP | FN |")
         lines.append("|---|---|---|---|---|---|---|")
         for etype, m in res_held["metrics"].items():
@@ -169,6 +178,21 @@ def main():
         lines.append(
             f"| **OVERALL** | **{o['precision']:.2%}** | **{o['recall']:.2%}** | **{o['f1']:.2%}** | **{o['tp']}** | **{o['fp']}** | **{o['fn']}** |\n"
         )
+        lines.append(f"**Mean Latency:** {o['mean_latency_ms']} ms\n")
+
+    if res_held_v2:
+        lines.append(f"## Held-Out Challenging Dataset v2 ({len(heldout_v2_samples)} Samples)\n")
+        lines.append("| Entity Type | Precision | Recall | F1 Score | TP | FP | FN |")
+        lines.append("|---|---|---|---|---|---|---|")
+        for etype, m in res_held_v2["metrics"].items():
+            lines.append(
+                f"| {etype} | {m['precision']:.2%} | {m['recall']:.2%} | {m['f1']:.2%} | {m['tp']} | {m['fp']} | {m['fn']} |"
+            )
+        o = res_held_v2["overall"]
+        lines.append(
+            f"| **OVERALL** | **{o['precision']:.2%}** | **{o['recall']:.2%}** | **{o['f1']:.2%}** | **{o['tp']}** | **{o['fp']}** | **{o['fn']}** |\n"
+        )
+        lines.append(f"**Mean Latency:** {o['mean_latency_ms']} ms\n")
 
     report_md = "\n".join(lines)
 

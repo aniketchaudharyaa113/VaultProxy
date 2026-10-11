@@ -22,25 +22,107 @@ It sits transparently between your application and cloud LLM providers (such as 
 
 ---
 
-## Quickstart (3 Steps)
+## Quickstart
+
+VaultProxy acts as an OpenAI-compatible reverse proxy. It intercepts outgoing requests to mask sensitive data, forwards masked prompts containing tokens (e.g., `[PAN_1]`) to your upstream LLM provider, and restores the original values when streaming or returning responses to your application.
 
 ### 1. Install VaultProxy
 ```bash
 pip install vaultproxy
 ```
-*(For local development editable install: `pip install -e .`)*
+*(For local development from source in a virtual environment: `pip install -e .`)*
 
-### 2. Run VaultProxy Server
+---
+
+### Option A: Try with Bundled Mock Upstream (Zero API Key Needed)
+
+You can verify privacy protection locally without making external network calls using the bundled mock upstream server.
+
+#### Step 1: Start the Mock Upstream Server (Terminal 1)
 ```bash
+# Starts a mock upstream OpenAI server on port 8001
+python3 -m uvicorn demo.mock_upstream:app --port 8001
+```
+
+#### Step 2: Start VaultProxy (Terminal 2)
+```bash
+export UPSTREAM_BASE_URL="http://127.0.0.1:8001"
 export VAULT_AUTH_TOKEN="your_secure_auth_token_here_at_least_24_chars"
+export GEMMA_BACKEND="off"  # Run deterministic rules offline
 vaultproxy
 ```
 VaultProxy starts listening at `http://127.0.0.1:8000`.
 
-### 3. Update Client `base_url`
-VaultProxy is drop-in compatible with standard OpenAI SDKs and frameworks (LangChain, LlamaIndex, LiteLLM):
+#### Step 3: Send a Request via cURL (Terminal 3)
+```bash
+curl -i http://127.0.0.1:8000/v1/chat/completions \
+  -H "Authorization: Bearer your_secure_auth_token_here_at_least_24_chars" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [
+      {"role": "user", "content": "My Aadhaar is 3675 9834 1203 and PAN is ABCPB1234F."}
+    ],
+    "stream": false
+  }'
+```
 
-#### Python OpenAI Client
+#### What You Will See:
+1. **In Terminal 1 (Mock Upstream Log - What the Cloud Sees)**:
+   ```json
+   --- [MOCK UPSTREAM RECEIVED REQUEST] ---
+   {
+     "model": "gpt-4o",
+     "messages": [
+       {
+         "role": "system",
+         "content": "IMPORTANT: Keep all token placeholders formatted like [TYPE_N] (e.g. [PAN_1], [AADHAAR_1]) EXACTLY as they are in your response. Do not modify, translate, or remove them."
+       },
+       {
+         "role": "user",
+         "content": "My Aadhaar is [AADHAAR_1] and PAN is [PAN_1]."
+       }
+     ],
+     "stream": false
+   }
+   ```
+   *Notice:* The upstream received ONLY `[AADHAAR_1]` and `[PAN_1]`. Zero raw identity numbers reached the upstream server!
+
+2. **In Terminal 3 (Client Response - What Your Application Receives)**:
+   ```json
+   {
+     "id": "chatcmpl-mock123",
+     "object": "chat.completion",
+     "choices": [
+       {
+         "message": {
+           "role": "assistant",
+           "content": "My Aadhaar is 3675 9834 1203 and PAN is ABCPB1234F."
+         }
+       }
+     ]
+   }
+   ```
+   *Notice:* The client receives the real restored values seamlessly, along with the `X-Vault-Report: {"masked": {"PAN": 1, "AADHAAR": 1}, ...}` response header.
+
+---
+
+### Option B: Use with a Real OpenAI-Compatible Upstream API
+
+When forwarding to a real cloud LLM provider (such as OpenAI), configure `UPSTREAM_BASE_URL` and `UPSTREAM_API_KEY`:
+
+#### Step 1: Start VaultProxy with Upstream Credentials
+```bash
+export UPSTREAM_BASE_URL="https://api.openai.com"
+export UPSTREAM_API_KEY="sk-your-real-openai-api-key"
+export VAULT_AUTH_TOKEN="your_secure_auth_token_here_at_least_24_chars"
+vaultproxy
+```
+
+#### Step 2: Configure Your Application
+Point your OpenAI client's `base_url` to VaultProxy (`http://127.0.0.1:8000/v1`) and use `VAULT_AUTH_TOKEN` as the API key:
+
+##### Python OpenAI Client
 ```python
 from openai import OpenAI
 
@@ -54,21 +136,23 @@ response = client.chat.completions.create(
     messages=[
         {
             "role": "user",
-            "content": "My name is Rajesh Sharma, PAN is ABCPB1234F and Aadhaar is 3675 9834 1203.",
+            "content": "My PAN is ABCPB1234F and Aadhaar is 3675 9834 1203. Confirm details.",
         }
     ],
 )
 print(response.choices[0].message.content)
 ```
 
-#### cURL
+##### cURL
 ```bash
 curl http://127.0.0.1:8000/v1/chat/completions \
   -H "Authorization: Bearer your_secure_auth_token_here_at_least_24_chars" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-4o",
-    "messages": [{"role": "user", "content": "My phone is 9876543210 and email is user@example.in"}]
+    "messages": [
+      {"role": "user", "content": "My phone is 9876543210 and email is user@example.in"}
+    ]
   }'
 ```
 
@@ -220,9 +304,11 @@ X-Vault-Report: {"masked": {"PAN": 1, "AADHAAR": 1, "PERSON": 1}, "degraded": fa
 
 ## Benchmark Results
 
-Evaluated using `bench/run.py` in rule-detector evaluation mode:
+Evaluated using `bench/run.py` in rule-detector evaluation mode across generated and held-out datasets:
 
-### Generated Test Dataset (40 Samples)
+### Generated Test Dataset (N = 40 Samples)
+Synthetic dataset generated with randomized entities and Hinglish templates (`bench/dataset.json`):
+
 | Entity Type | Precision | Recall | F1 Score | TP | FP | FN |
 |---|---|---|---|---|---|---|
 | AADHAAR | 100.00% | 100.00% | 100.00% | 23 | 0 | 0 |
@@ -234,19 +320,40 @@ Evaluated using `bench/run.py` in rule-detector evaluation mode:
 | UPI_ID | 100.00% | 100.00% | 100.00% | 21 | 0 | 0 |
 | **OVERALL** | **100.00%** | **100.00%** | **100.00%** | **126** | **0** | **0** |
 
-*Mean Latency:* 0.03 ms per request.
+*Mean Latency:* 0.03 ms per sample.
 
-### Held-Out Evaluation Dataset (5 Samples)
+### Held-Out Evaluation Dataset v1 (N = 5 Samples)
+Initial baseline held-out dataset (`bench/heldout.jsonl`) with verified gold entity spans:
+
 | Entity Type | Precision | Recall | F1 Score | TP | FP | FN |
 |---|---|---|---|---|---|---|
-| AADHAAR | 50.00% | 50.00% | 50.00% | 1 | 1 | 1 |
+| AADHAAR | 100.00% | 100.00% | 100.00% | 2 | 0 | 0 |
 | EMAIL | 100.00% | 100.00% | 100.00% | 1 | 0 | 0 |
 | IFSC | 100.00% | 100.00% | 100.00% | 1 | 0 | 0 |
 | MOBILE | 100.00% | 100.00% | 100.00% | 1 | 0 | 0 |
-| PAN | 50.00% | 50.00% | 50.00% | 1 | 1 | 1 |
+| PAN | 100.00% | 100.00% | 100.00% | 2 | 0 | 0 |
 | SECRET | 100.00% | 100.00% | 100.00% | 1 | 0 | 0 |
 | UPI_ID | 100.00% | 100.00% | 100.00% | 1 | 0 | 0 |
-| **OVERALL** | **77.78%** | **77.78%** | **77.78%** | **7** | **2** | **2** |
+| **OVERALL** | **100.00%** | **100.00%** | **100.00%** | **9** | **0** | **0** |
+
+*Mean Latency:* 0.03 ms per sample.
+
+### Held-Out Challenging Dataset v2 (N = 40 Samples)
+Hand-crafted realistic messages (`bench/heldout_v2.jsonl`) testing spaces, hyphens, newlines, Indic numerals (Devanagari, Bengali, Tamil, Telugu, Gujarati, Malayalam, Odia), Hinglish phrases, and tricky negative examples (order IDs, tracking numbers, version numbers, invalid Verhoeff checksums, invalid PAN structures):
+
+| Entity Type | Precision | Recall | F1 Score | TP | FP | FN |
+|---|---|---|---|---|---|---|
+| AADHAAR | 100.00% | 100.00% | 100.00% | 13 | 0 | 0 |
+| EMAIL | 100.00% | 100.00% | 100.00% | 3 | 0 | 0 |
+| IFSC | 100.00% | 100.00% | 100.00% | 3 | 0 | 0 |
+| MOBILE | 85.71% | 100.00% | 92.31% | 6 | 1 | 0 |
+| PAN | 100.00% | 100.00% | 100.00% | 6 | 0 | 0 |
+| SECRET | 100.00% | 100.00% | 100.00% | 2 | 0 | 0 |
+| UPI_ID | 100.00% | 100.00% | 100.00% | 4 | 0 | 0 |
+| **OVERALL** | **97.37%** | **100.00%** | **98.67%** | **37** | **1** | **0** |
+
+*Mean Latency:* 0.02 ms per sample.  
+*Analysis of False Positive:* 1 false positive on `MOBILE` in sample 30 (`PROD-9988776655-REV2`), where the 10-digit substring `9988776655` embedded between hyphens in a hardware product code matched mobile digit format. Aadhaar Verhoeff checksum validation and PAN structure validation produced 0 false positives on order IDs, tracking codes, and version numbers.
 
 ---
 

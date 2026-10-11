@@ -1,0 +1,40 @@
+{"text": "Bhai mera Aadhaar card 3675 9834 1203 aur PAN card ABCPB1234F check kar lo.", "spans": [{"start": 23, "end": 37, "type": "AADHAAR"}, {"start": 51, "end": 61, "type": "PAN"}]}
+{"text": "UIDAI copy attached:\n3675-9834-1203\nPlease verify soon.", "spans": [{"start": 21, "end": 35, "type": "AADHAAR"}]}
+{"text": "Call me urgently on +91 98765 43210 regarding the courier.", "spans": [{"start": 20, "end": 35, "type": "MOBILE"}]}
+{"text": "Support desk helpline: +91-98765-43210 open 9am to 6pm.", "spans": [{"start": 23, "end": 38, "type": "MOBILE"}]}
+{"text": "OTP sent to registered number 9876543210 valid for 10 mins.", "spans": [{"start": 30, "end": 40, "type": "MOBILE"}]}
+{"text": "Send audit logs to compliance.officer_in@corp.subdomain.gov.in right away.", "spans": [{"start": 19, "end": 62, "type": "EMAIL"}]}
+{"text": "Pay the invoice balance to vendor.billing@okaxis today.", "spans": [{"start": 27, "end": 48, "type": "UPI_ID"}]}
+{"text": "GPay / PhonePe: 9876543210@ybl is active.", "spans": [{"start": 16, "end": 30, "type": "UPI_ID"}]}
+{"text": "NEFT transfer to account at branch with IFSC code ICIC0001234.", "spans": [{"start": 50, "end": 61, "type": "IFSC"}]}
+{"text": "Remit funds to State Bank of India, IFSC SBIN0000456.", "spans": [{"start": 41, "end": 52, "type": "IFSC"}]}
+{"text": "Server crash log dump: AWS_KEY=AKIAIOSFODNN7EXAMPLE trace ended.", "spans": [{"start": 31, "end": 51, "type": "SECRET"}]}
+{"text": "Found token github_pat_11AAAAAAA0123456789012_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456 in repo.", "spans": [{"start": 12, "end": 105, "type": "SECRET"}]}
+{"text": "नागरिक का आधार नंबर ३६७५९८३४१२०३ सत्यापित किया गया।", "spans": [{"start": 20, "end": 32, "type": "AADHAAR"}]}
+{"text": "পশ্চিমবঙ্গ গ্রাহক: আধার ৩৬৭৫৯৮৩৪১২০৩ এবং প্যান BKZPR5678K.", "spans": [{"start": 24, "end": 36, "type": "AADHAAR"}, {"start": 47, "end": 57, "type": "PAN"}]}
+{"text": "வாடிக்கையாளர் ஆதார் எண் ௩௬௭௫௯௮௩௪௧௨௦௩ சரிபார்க்கப்பட்டது.", "spans": [{"start": 24, "end": 36, "type": "AADHAAR"}]}
+{"text": "ગ્રાહક આધાર નંબર ૩૬૭૫૯૮૩૪૧૨૦૩ નોંધાયેલ છે.", "spans": [{"start": 17, "end": 29, "type": "AADHAAR"}]}
+{"text": "వినియోగదారు ఆధార్ సంఖ్య ౩౬౭౫౯౮౩౪౧౨౦౩ నమోదు చేయబడింది.", "spans": [{"start": 24, "end": 36, "type": "AADHAAR"}]}
+{"text": "Company corporate PAN is AAACR1234C on invoice header.", "spans": [{"start": 25, "end": 35, "type": "PAN"}]}
+{"text": "Partnership firm registration PAN: AABFA5678D registered.", "spans": [{"start": 35, "end": 45, "type": "PAN"}]}
+{"text": "Arre suno, payment test.user@paytm pe bhej do aur IFSC PUNB0123400 check karna.", "spans": [{"start": 19, "end": 34, "type": "UPI_ID"}, {"start": 55, "end": 66, "type": "IFSC"}]}
+{"text": "Sir aapka Aadhaar 543210987652 upload kardo portal pe.", "spans": [{"start": 18, "end": 30, "type": "AADHAAR"}]}
+{"text": "Primary mobile: +91 91234 56789; alternate mobile: 9811223344.", "spans": [{"start": 16, "end": 31, "type": "MOBILE"}, {"start": 51, "end": 61, "type": "MOBILE"}]}
+{"text": "Contact administrator at <admin.support@cloud-infra.in> for help.", "spans": [{"start": 26, "end": 54, "type": "EMAIL"}]}
+{"text": "Please note down your PAN: DZZPM9876E, and keep the card safe.", "spans": [{"start": 27, "end": 37, "type": "PAN"}]}
+{"text": "Customer identity verified with UIDAI (367598341203).", "spans": [{"start": 39, "end": 51, "type": "AADHAAR"}]}
+{"text": "Your Amazon order ID 123456789012 is out for delivery.", "spans": []}
+{"text": "FedEx tracking consignment 012345678901 arrived at sorting hub.", "spans": []}
+{"text": "Attempted fraud registration with invalid UIDAI 367598341209 rejected.", "spans": []}
+{"text": "Invalid reference code ABCXE1234F does not represent a taxpayer.", "spans": []}
+{"text": "Hardware model serial PROD-9988776655-REV2 recorded.", "spans": []}
+{"text": "Released kernel v6.12.3.4 build 20261011 on production cluster.", "spans": []}
+{"text": "International shipping barcode 98765432109876 scanned at dock.", "spans": []}
+{"text": "Bank transaction ref 12345678 approved by merchant gateway.", "spans": []}
+{"text": "Dial extension 987654321 for internal operator routing.", "spans": []}
+{"text": "Send inquiries to contact@standardbank.com directly.", "spans": [{"start": 18, "end": 42, "type": "EMAIL"}]}
+{"text": "Aadhaar is 987654321012 but dial extension 987654321 if unavailable.", "spans": [{"start": 11, "end": 23, "type": "AADHAAR"}]}
+{"text": "Taxpayer PAN is CHZPA1111Q; ticket ref is TICKET12345.", "spans": [{"start": 16, "end": 26, "type": "PAN"}]}
+{"text": "ആധാർ നമ്പർ ൩൬൭൫൯൮൩൪൧൨൦൩ നൽകുക.", "spans": [{"start": 11, "end": 23, "type": "AADHAAR"}]}
+{"text": "ଗ୍ରାହକ ଆଧାର ନମ୍ବର ୩୬୭୫୯୮୩୪୧୨୦୩ ଯାଞ୍ଚ ହୋଇଛି.", "spans": [{"start": 18, "end": 30, "type": "AADHAAR"}]}
+{"text": "Arrey bhai, mera Aadhaar 412345678902 aur mobile +91 99887 76655 dono link kar do, UPI rajesh@okicici hai!", "spans": [{"start": 25, "end": 37, "type": "AADHAAR"}, {"start": 49, "end": 64, "type": "MOBILE"}, {"start": 87, "end": 101, "type": "UPI_ID"}]}

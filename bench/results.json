@@ -74,12 +74,12 @@
   "heldout": {
     "metrics": {
       "AADHAAR": {
-        "precision": 0.5,
-        "recall": 0.5,
-        "f1": 0.5,
-        "tp": 1,
-        "fp": 1,
-        "fn": 1
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "tp": 2,
+        "fp": 0,
+        "fn": 0
       },
       "EMAIL": {
         "precision": 1.0,
@@ -106,12 +106,12 @@
         "fn": 0
       },
       "PAN": {
-        "precision": 0.5,
-        "recall": 0.5,
-        "f1": 0.5,
-        "tp": 1,
-        "fp": 1,
-        "fn": 1
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "tp": 2,
+        "fp": 0,
+        "fn": 0
       },
       "SECRET": {
         "precision": 1.0,
@@ -131,38 +131,93 @@
       }
     },
     "overall": {
-      "precision": 0.7778,
-      "recall": 0.7778,
-      "f1": 0.7778,
-      "tp": 7,
-      "fp": 2,
-      "fn": 2,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "tp": 9,
+      "fp": 0,
+      "fn": 0,
+      "mean_latency_ms": 0.03
+    },
+    "false_positives": [],
+    "false_negatives": []
+  },
+  "heldout_v2": {
+    "metrics": {
+      "AADHAAR": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "tp": 13,
+        "fp": 0,
+        "fn": 0
+      },
+      "EMAIL": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "tp": 3,
+        "fp": 0,
+        "fn": 0
+      },
+      "IFSC": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "tp": 3,
+        "fp": 0,
+        "fn": 0
+      },
+      "MOBILE": {
+        "precision": 0.8571,
+        "recall": 1.0,
+        "f1": 0.9231,
+        "tp": 6,
+        "fp": 1,
+        "fn": 0
+      },
+      "PAN": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "tp": 6,
+        "fp": 0,
+        "fn": 0
+      },
+      "SECRET": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "tp": 2,
+        "fp": 0,
+        "fn": 0
+      },
+      "UPI_ID": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "tp": 4,
+        "fp": 0,
+        "fn": 0
+      }
+    },
+    "overall": {
+      "precision": 0.9737,
+      "recall": 1.0,
+      "f1": 0.9867,
+      "tp": 37,
+      "fp": 1,
+      "fn": 0,
       "mean_latency_ms": 0.02
     },
     "false_positives": [
       {
-        "sample_index": 4,
-        "type": "AADHAAR",
-        "text": "\u09e9\u09ec\u09ed\u09eb\u09ef\u09ee\u09e9\u09ea\u09e7\u09e8\u09e6\u09e9"
-      },
-      {
-        "sample_index": 4,
-        "type": "PAN",
-        "text": "ABCPB1234F"
+        "sample_index": 29,
+        "type": "MOBILE",
+        "text": "9988776655"
       }
     ],
-    "false_negatives": [
-      {
-        "sample_index": 4,
-        "type": "AADHAAR",
-        "text": "ali digits \u0986"
-      },
-      {
-        "sample_index": 4,
-        "type": "PAN",
-        "text": "\u09ee\u09e9\u09ea\u09e7\u09e8\u09e6\u09e9 an"
-      }
-    ]
+    "false_negatives": []
   },
   "metrics": {
     "AADHAAR": {
