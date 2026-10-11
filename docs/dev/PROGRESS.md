@@ -11,7 +11,7 @@
 | Phase 5 | 2026-10-10 | 1d81936 | 136 | 83% | +450 | VAULT_AUTH_TOKEN, MAX_BODY_BYTES, REQUEST_TIMEOUT_SECONDS, MAX_CONCURRENT_REQUESTS | Upstream network latency under extreme load |
 | Phase 5.1 | 2026-10-10 | 26c769b | 144 | 84% | +76 | None (0 new settings) | None |
 | Phase 5.2 | 2026-10-10 | f798cce | 150 | 86% | +140 | None (0 new settings) | None |
-| Phase 5.3 | 2026-10-11 | 363f838 | 150 | 86% | +242 | None (0 new settings) | None |
+| Phase 5.3 | 2026-10-11 | 0fed54e | 150 | 86% | +242 | None (0 new settings) | None |
 | Phase 3a (pending) | - | - | - | - | - | - | Refactor, zero behaviour change |
 | Phase 3b (pending) | - | - | - | - | - | - | Easy to use (CLI, doctor, production refusal check) |
 | Phase 6 (pending) | - | - | - | - | - | - | Packaging and deployment |
