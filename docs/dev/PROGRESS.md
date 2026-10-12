@@ -12,11 +12,13 @@
 | Phase 5.1 | 2026-10-10 | 26c769b | 144 | 84% | +76 | None (0 new settings) | None |
 | Phase 5.2 | 2026-10-10 | f798cce | 150 | 86% | +140 | None (0 new settings) | None |
 | Phase 5.3 | 2026-10-11 | 0fed54e | 150 | 86% | +242 | None (0 new settings) | None |
-| Phase 3a (pending) | - | - | - | - | - | - | Refactor, zero behaviour change |
-| Phase 3b (pending) | - | - | - | - | - | - | Easy to use (CLI, doctor, production refusal check) |
-| Phase 6 (pending) | - | - | - | - | - | - | Packaging and deployment |
-| Phase 4 (pending) | - | - | - | - | - | - | Better detection |
-| Phase 7 (pending) | - | - | - | - | - | - | Documentation |
-| Phase 9 (pending) | - | - | - | - | - | - | Final check & capacity guidance |
-| Phase 8 (pending) | - | - | - | - | - | - | CI and release |
-| Phase 10 (pending) | - | - | - | - | - | - | Real-use gates report |
+| Phase 1a (pending) | - | - | - | - | - | - | Correctness and privacy blockers (B1-B5, B11, B12) |
+| Phase 1b (pending) | - | - | - | - | - | - | Request handling and masking correctness (B6-B10) |
+| Phase 1c (pending) | - | - | - | - | - | - | SLM honesty, startup UX, test fragility, docs vs code (B13-B18) |
+| Phase 2 (pending) | - | - | - | - | - | - | Developer-ready run and deploy (split server, CLI, doctor, docker, compose) |
+| Phase 3 (pending) | - | - | - | - | - | - | Detection quality (verified formats, allow/deny lists, probe suite) |
+| Phase 4 (pending) | - | - | - | - | - | - | Latency optimizations (HMAC span cache, bounded parallel SLM) |
+| Phase 5 (pending) | - | - | - | - | - | - | Docs and compatibility recipes (tested end to end) |
+| Phase 6 (pending) | - | - | - | - | - | - | CI and release preparation (manual triggers, security scans) |
+| Phase 7 (pending) | - | - | - | - | - | - | Real-use gates report (REAL_USE_GATES.md, soak, live checks) |
+
