@@ -262,4 +262,4 @@ async def process_sse_stream(
         for r in restorers.values():
             r.flush()
         await upstream_resp.aclose()
-        await client.aclose()
+

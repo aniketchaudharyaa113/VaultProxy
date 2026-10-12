@@ -40,9 +40,10 @@ async def readyz(request: Request) -> dict[str, Any]:
     )
 
     status_val = "ready" if circuit_breaker.state != "OPEN" else "degraded"
-    if settings.VAULT_PROFILE.lower() == "production":
+    if settings.VAULT_AUTH_TOKEN:
         if not is_authenticated_request(request):
             return {"status": status_val}
+
 
     return {
         "status": status_val,

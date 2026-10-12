@@ -4,6 +4,7 @@ import logging
 import os
 import time
 import uuid
+from collections.abc import AsyncGenerator
 from typing import Any
 
 import httpx
@@ -32,6 +33,9 @@ from vaultproxy.vault import RequestVault
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("vaultproxy")
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+
 
 app = FastAPI(title="VaultProxy")
 app.include_router(demo_router)
@@ -66,7 +70,12 @@ CLIENT_HEADER_ALLOWLIST = {
     "openai-beta",
 }
 
-RESPONSE_DROP_HEADERS = HOP_BY_HOP_HEADERS | {"set-cookie"}
+RESPONSE_DROP_HEADERS = HOP_BY_HOP_HEADERS | {
+    "set-cookie",
+    "content-encoding",
+    "content-length",
+    "transfer-encoding",
+}
 
 PRODUCTION_ALLOWED_ROUTES = {
     ("POST", "/v1/chat/completions"),
@@ -79,6 +88,28 @@ PRODUCTION_ALLOWED_ROUTES = {
 
 _httpx_client: httpx.AsyncClient | None = None
 _concurrency_semaphore: asyncio.Semaphore | None = None
+
+
+def build_upstream_url(base_url: str, endpoint: str) -> str:
+    """Build upstream URL following OpenAI SDK conventions.
+
+    Treats UPSTREAM_BASE_URL like base_url: appends endpoint (e.g. chat/completions,
+    embeddings, models). If base_url has no path component at all, /v1 is added.
+    """
+    from urllib.parse import urlparse
+
+    parsed = urlparse(base_url.rstrip("/"))
+    clean_endpoint = endpoint.lstrip("/")
+    base_path = parsed.path.rstrip("/")
+
+    # If the URL has no path at all (e.g. https://api.openai.com), add /v1
+    if not base_path:
+        path = f"/v1/{clean_endpoint}"
+    else:
+        path = f"{base_path}/{clean_endpoint}"
+
+    port_str = f":{parsed.port}" if parsed.port else ""
+    return f"{parsed.scheme}://{parsed.hostname}{port_str}{path}"
 
 
 def get_httpx_client() -> httpx.AsyncClient:
@@ -218,18 +249,7 @@ async def parse_and_validate_request_body(request: Request) -> tuple[bytes, dict
 
 @app.get("/metrics")
 async def get_metrics(request: Request) -> Response:
-    if not METRICS_AVAILABLE:
-        return JSONResponse(
-            status_code=404,
-            content={
-                "error": {
-                    "message": "Metrics feature not installed.",
-                    "type": "not_found_error",
-                }
-            },
-        )
-
-    if not is_authenticated_request(request):
+    if settings.VAULT_AUTH_TOKEN and not is_authenticated_request(request):
         return JSONResponse(
             status_code=401,
             content={
@@ -241,6 +261,18 @@ async def get_metrics(request: Request) -> Response:
             },
         )
 
+    if not METRICS_AVAILABLE:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "error": {
+                    "message": "Metrics feature not installed.",
+                    "type": "not_found_error",
+                }
+            },
+        )
+
+
     return Response(content=generate_latest(), media_type="text/plain; version=0.0.4")
 
 
@@ -249,7 +281,7 @@ async def get_models(request: Request) -> Response:
     t0 = time.perf_counter()
     req_id = str(uuid.uuid4())
 
-    if settings.VAULT_PROFILE.lower() == "production" and not is_authenticated_request(request):
+    if settings.VAULT_AUTH_TOKEN and not is_authenticated_request(request):
         return JSONResponse(
             status_code=401,
             content={
@@ -262,7 +294,7 @@ async def get_models(request: Request) -> Response:
         )
 
     headers = clean_headers(request.headers)
-    url = f"{settings.UPSTREAM_BASE_URL.rstrip('/')}/v1/models"
+    url = build_upstream_url(settings.UPSTREAM_BASE_URL, "models")
     client = get_httpx_client()
 
     try:
@@ -304,7 +336,7 @@ async def embeddings(request: Request) -> Response:
     t0 = time.perf_counter()
     req_id = str(uuid.uuid4())
 
-    if settings.VAULT_PROFILE.lower() == "production" and not is_authenticated_request(request):
+    if settings.VAULT_AUTH_TOKEN and not is_authenticated_request(request):
         return JSONResponse(
             status_code=401,
             content={
@@ -384,7 +416,7 @@ async def embeddings(request: Request) -> Response:
 
         headers = clean_headers(request.headers)
         headers["content-type"] = "application/json"
-        url = f"{settings.UPSTREAM_BASE_URL.rstrip('/')}/v1/embeddings"
+        url = build_upstream_url(settings.UPSTREAM_BASE_URL, "embeddings")
         report_header = create_vault_report_header(
             masked_counts=vault.type_counts,
             degraded=degraded,
@@ -441,7 +473,7 @@ async def chat_completions(request: Request) -> Response:
     t0 = time.perf_counter()
     req_id = str(uuid.uuid4())
 
-    if settings.VAULT_PROFILE.lower() == "production" and not is_authenticated_request(request):
+    if settings.VAULT_AUTH_TOKEN and not is_authenticated_request(request):
         return JSONResponse(
             status_code=401,
             content={
@@ -466,7 +498,10 @@ async def chat_completions(request: Request) -> Response:
             },
         )
 
-    async with sem:
+    await sem.acquire()
+    slot_held = True
+
+    try:
         vault = RequestVault()
         degraded = False
         counts: dict[str, int] = {}
@@ -502,10 +537,11 @@ async def chat_completions(request: Request) -> Response:
             ) = await engine.mask_payload(body_json)
             counts = vault.type_counts
 
-            from vaultproxy.health import LAST_MASKED_REQUEST
+            if settings.DEMO_MODE:
+                from vaultproxy.health import LAST_MASKED_REQUEST
 
-            LAST_MASKED_REQUEST.clear()
-            LAST_MASKED_REQUEST.update(masked_body_json)
+                LAST_MASKED_REQUEST.clear()
+                LAST_MASKED_REQUEST.update(masked_body_json)
 
             masked_body = json.dumps(masked_body_json).encode("utf-8")
         except HTTPException:
@@ -525,7 +561,7 @@ async def chat_completions(request: Request) -> Response:
 
         headers = clean_headers(request.headers)
         headers["content-type"] = "application/json"
-        url = f"{settings.UPSTREAM_BASE_URL.rstrip('/')}/v1/chat/completions"
+        url = build_upstream_url(settings.UPSTREAM_BASE_URL, "chat/completions")
         report_header = create_vault_report_header(
             masked_counts=vault.type_counts,
             degraded=degraded,
@@ -547,12 +583,47 @@ async def chat_completions(request: Request) -> Response:
             res: Response
             if upstream_resp.headers.get("content-type", "").startswith("text/event-stream"):
                 model_name = body_json.get("model", "proxy-model")
+
+                async def sem_holding_stream() -> AsyncGenerator[str, None]:
+                    nonlocal slot_held
+                    try:
+                        async for chunk in process_sse_stream(
+                            upstream_resp, client, vault, model_name
+                        ):
+                            yield chunk
+                    finally:
+                        if slot_held:
+                            sem.release()
+                            slot_held = False
+                        ms = round((time.perf_counter() - t0) * 1000, 2)
+                        logger.info(
+                            json.dumps(
+                                {
+                                    "request_id": req_id,
+                                    "status": status_code,
+                                    "milliseconds": ms,
+                                    "counts": counts,
+                                    "degraded": degraded,
+                                    "strict": settings.STRICT_MODE,
+                                }
+                            )
+                        )
+                        record_request_metrics(
+                            ms / 1000.0,
+                            sum(counts.values()),
+                            degraded,
+                            circuit_breaker.state,
+                        )
+
+                slot_held = False
                 res = StreamingResponse(
-                    process_sse_stream(upstream_resp, client, vault, model_name),
+                    sem_holding_stream(),
                     status_code=upstream_resp.status_code,
                     headers=resp_headers,
                     media_type="text/event-stream",
                 )
+                return res
+
             else:
                 content = await upstream_resp.aread()
                 await upstream_resp.aclose()
@@ -595,6 +666,11 @@ async def chat_completions(request: Request) -> Response:
             ms / 1000.0, sum(counts.values()), degraded, circuit_breaker.state
         )
         return res
+    finally:
+        if slot_held:
+            sem.release()
+            slot_held = False
+
 
 
 def main() -> None:

@@ -343,7 +343,8 @@ async def run_gemma_detection(text: str) -> tuple[list[Span], bool, bool]:
 
             elif backend == "gemini":
                 model_to_use = settings.GEMMA_MODEL
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_to_use}:generateContent?key={settings.GEMINI_API_KEY}"
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_to_use}:generateContent"
+                headers = {"x-goog-api-key": settings.GEMINI_API_KEY}
                 payload = {
                     "contents": [{"parts": [{"text": prompt}]}],
                     "generationConfig": {
@@ -352,7 +353,7 @@ async def run_gemma_detection(text: str) -> tuple[list[Span], bool, bool]:
                         "responseMimeType": "application/json",
                     },
                 }
-                resp = await client.post(url, json=payload)
+                resp = await client.post(url, headers=headers, json=payload)
                 resp.raise_for_status()
                 res_data = resp.json()
                 raw_json = (
@@ -379,11 +380,16 @@ async def run_gemma_detection(text: str) -> tuple[list[Span], bool, bool]:
             raise ValueError(f"Unsupported backend {backend}")
 
     except Exception as e:
-        logger.warning(f"Gemma layer error ({type(e).__name__}): {e}")
+        err_msg = str(e)
+        if "http" in err_msg.lower() or "://" in err_msg or "key=" in err_msg.lower():
+            err_msg = f"{type(e).__name__} (details redacted)"
+        logger.warning(f"Gemma layer error ({type(e).__name__}): {err_msg}")
         circuit_breaker.record_failure()
 
         if settings.STRICT_MODE:
-            raise GemmaLayerError(f"Gemma layer failed in STRICT_MODE: {e}") from e
+            raise GemmaLayerError(f"Gemma layer failed in STRICT_MODE: {err_msg}") from e
+
+
 
         if backend == "auto":
             fb_spans = _heuristic_gemma_fallback(text)

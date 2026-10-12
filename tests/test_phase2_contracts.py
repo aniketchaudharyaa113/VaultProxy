@@ -281,11 +281,12 @@ def test_streaming_parallel_tools_resiliency_exit_paths(client):
         assert len(items) >= 2
         assert any("stream_error" in item for item in items)
 
-        # Verify exit path cleanup: upstream and client closed, buffers flushed
+        # Verify exit path cleanup: upstream response closed, client not closed (B2 fix)
         mock_upstream.aclose.assert_called_once()
-        mock_client.aclose.assert_called_once()
+        mock_client.aclose.assert_not_called()
 
     anyio.run(_test_generator_exit)
+
 
 
 # -------------------------------------------------------------------
