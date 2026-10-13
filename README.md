@@ -109,8 +109,8 @@ Restores sensitive entities in real time on streaming and non-streaming model re
 
 ### Step 1: Clone Repository
 ```bash
-git clone https://github.com/aniketchaudharyaa113/october.git
-cd october
+git clone https://github.com/aniketchaudharyaa113/vaultproxy.git
+cd vaultproxy
 ```
 
 ### Step 2: Create a Virtual Environment and Install

@@ -22,8 +22,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/aniketchaudharyaa113/october"
-Repository = "https://github.com/aniketchaudharyaa113/october"
+Homepage = "https://github.com/aniketchaudharyaa113/vaultproxy"
+Repository = "https://github.com/aniketchaudharyaa113/vaultproxy"
 
 [project.scripts]
 vaultproxy = "vaultproxy.server:main"

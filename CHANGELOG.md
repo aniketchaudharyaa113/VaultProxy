@@ -18,6 +18,7 @@ All notable changes to VaultProxy will be documented in this file.
 - **B11 (Request Memory Hygiene)**: Retained request payload inspection disabled in production profile (`DEMO_MODE=false`).
 - **B12 (Secret Scrubbing)**: Gemini API key removed from all logged URLs and debug logging.
 - **B14 (Honesty Fix)**: Removed `_heuristic_gemma_fallback` and all hardcoded person names. Default `GEMMA_BACKEND` set to `"off"`.
+- **B15 (Startup Error Diagnostic)**: Production misconfigurations print a clean readable error to stderr and exit without tracebacks.
 
 ### Corrections
 - Removed `_heuristic_gemma_fallback` and hardcoded person names (`Rajesh Sharma`, `Vikram`, `Ramesh Kumar`, `Aarav`, `Priya Patel`, `Aniket Chaudhary`).
@@ -30,8 +31,7 @@ All notable changes to VaultProxy will be documented in this file.
   - `tests/test_merge_and_layer_correctness.py`
 
 ### Known Issues
-- `/readyz` endpoint can report `"ready"` when the configured SLM backend is offline (B13, scheduled for Phase 1c).
-- Misconfigured production startup exits with a Python traceback rather than a clean message (B15, scheduled for Phase 1c).
+- `/readyz` endpoint can report `"ready"` when the configured SLM backend is offline (B13, scheduled for next release).
 - Detector coverage gaps: lowercase PAN, spaced PAN, dotted Aadhaar, unlisted UPI handles, and non-prefixed secret formats.
 - Azure OpenAI and native Anthropic `/v1/messages` endpoints are unsupported.
 - Untested third-party LLM providers and client libraries beyond OpenAI Python and curl.
