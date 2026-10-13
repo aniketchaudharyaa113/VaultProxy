@@ -1,377 +1,436 @@
 # VaultProxy
 
-> **Early pre-release (0.x). Not independently security-reviewed. Test with non-sensitive data first.**
+Local-first, OpenAI-compatible privacy proxy for LLM applications.
+Intercepts prompt payloads to mask sensitive Indian personal data and API keys before forwarding upstream.
+Restores sensitive entities in real time on streaming and non-streaming model responses.
 
-VaultProxy is a local-first, OpenAI-compatible privacy proxy designed for LLM applications handling sensitive Indian personal data and API credentials.
-It sits transparently between your application and cloud LLM providers (such as OpenAI, Anthropic, or Azure OpenAI), intercepting outgoing prompt payloads, tokenizing sensitive entities (PAN, Aadhaar, phone numbers, emails, secrets, person names, addresses), and restoring the original sensitive values in real-time streaming or non-streaming responses.
-
----
-
-## Table of Contents
-- [Quickstart (3 Steps)](#quickstart-3-steps)
-- [Architecture & How It Works](#architecture--how-it-works)
-- [Detection Capabilities](#detection-capabilities)
-- [Configuration Reference](#configuration-reference)
-- [Production Hardening & Security Profile](#production-hardening--security-profile)
-- [Observability & Metrics](#observability--metrics)
-- [Known Limitations & Threat Model](#known-limitations--threat-model)
-- [Benchmark Results](#benchmark-results)
-- [Comparison](#comparison)
-- [Development Demo Console](#development-demo-console)
-- [License & Security Policy](#license--security-policy)
+> **Pre-release (0.2.x). Not independently security-reviewed. Try it with non-sensitive data first. Not legal advice; using it does not make a deployment compliant.**
 
 ---
 
-## Quickstart
+## 1. What It Does and What It Does Not Do
 
-VaultProxy acts as an OpenAI-compatible reverse proxy. It intercepts outgoing requests to mask sensitive data, forwards masked prompts containing tokens (e.g., `[PAN_1]`) to your upstream LLM provider, and restores the original values when streaming or returning responses to your application.
+### What it does:
+- Intercepts OpenAI-compatible chat completion requests locally and masks Indian personal data (Aadhaar, PAN, mobile numbers, UPI IDs, IFSC codes, email addresses) and generic API secrets using deterministic regex and checksum rules.
+- Restores original sensitive values on response streams (SSE) and JSON responses so the client receives unmasked output while upstream receives typed token placeholders like `[PAN_1]`.
+- Provides an optional secondary SLM layer (Gemma via Ollama or Gemini API) for unstructured personal names and postal addresses with concurrency control and fail-closed strict error handling.
 
-### 1. Install VaultProxy
-```bash
-pip install vaultproxy
+### What it does not do:
+- Does not scrub background context, semantic clues, or unmasked identifying details in prompt prose (such as job titles, dates, or relationship references).
+- Does not translate non-standard vendor APIs (Azure OpenAI deployment-based endpoints and native Anthropic `/v1/messages` APIs are not supported).
+- Does not provide TLS termination or cryptographic access isolation on its own (runs over plain HTTP on `127.0.0.1`; using it does not make an application legally compliant).
+
+---
+
+## 2. How It Works
+
+```text
+               +-------------------------------------------------+
+               |                   VaultProxy                    |
+[Client App]   |                                                 |   [Upstream LLM]
+     |         |   1. Inspect JSON & scan leaves                 |         |
+     |-------->|   2. Rule Detectors (Aadhaar, PAN, etc.)        |         |
+     | Request |   3. Optional SLM (Gemma via Ollama)            |         |
+     |         |   4. Tokenize to [PAN_1], store in RequestVault |         |
+     |         |                                                 |         |
+     |         |---------------- Forward Masked Payload -------->|         |
+     |         |                                                 | Receive |
+     |         |<--------------- Response with Tokens -----------| Tokens  |
+     |         |                                                 |         |
+     |<--------|   5. Restore [PAN_1] -> original value          |         |
+     | Restored|   6. Add X-Vault-Report header                  |         |
+     | Reply   +-------------------------------------------------+         |
 ```
-*(For local development from source in a virtual environment: `pip install -e .`)*
+
+### Real Execution Example (from `scripts/smoke.sh`)
+
+**Client Request:**
+```json
+{
+  "model": "gpt-4",
+  "messages": [
+    {
+      "role": "user",
+      "content": "My Aadhaar is 367598341203 and PAN is ABCPB1234F."
+    }
+  ],
+  "stream": false
+}
+```
+
+**What the Upstream Received:**
+```json
+{
+  "model": "gpt-4",
+  "messages": [
+    {
+      "role": "system",
+      "content": "IMPORTANT: Keep all token placeholders formatted like [TYPE_N] (e.g. [PAN_1], [AADHAAR_1]) EXACTLY as they are in your response. Do not modify, translate, or remove them."
+    },
+    {
+      "role": "user",
+      "content": "My Aadhaar is [AADHAAR_1] and PAN is [PAN_1]."
+    }
+  ],
+  "stream": false
+}
+```
+
+**Restored Reply Received by Client:**
+```json
+{
+  "id": "chatcmpl-mock123",
+  "object": "chat.completion",
+  "created": 1700000000,
+  "model": "gpt-4",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "My Aadhaar is 367598341203 and PAN is ABCPB1234F."
+      },
+      "finish_reason": "stop"
+    }
+  ]
+}
+```
+
+**`X-Vault-Report` Header Added to Response:**
+```json
+{"masked": {"PAN": 1, "AADHAAR": 1}, "degraded": false, "gemma_used": false, "slm_chunks": 1}
+```
 
 ---
 
-### Option A: Try with Bundled Mock Upstream (Zero API Key Needed)
+## 3. Quickstart from Source
 
-You can verify privacy protection locally without making external network calls using the bundled mock upstream server.
+*Note: VaultProxy is not on PyPI yet, there is no Docker image yet, and there is no standalone CLI binary yet. Run from source using python.*
 
-#### Step 1: Start the Mock Upstream Server (Terminal 1)
+### Step 1: Clone Repository
 ```bash
-# Starts a mock upstream OpenAI server on port 8001
+git clone https://github.com/aniketchaudharyaa113/october.git
+cd october
+```
+
+### Step 2: Create a Virtual Environment and Install
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install .
+```
+
+### Step 3: Run
+
+#### Path (a): Try with Bundled Mock Upstream (Zero API Keys Needed)
+
+Terminal 1 — Run mock upstream server:
+```bash
 python3 -m uvicorn demo.mock_upstream:app --port 8001
 ```
 
-#### Step 2: Start VaultProxy (Terminal 2)
+Terminal 2 — Run VaultProxy pointing to the mock upstream:
 ```bash
-export UPSTREAM_BASE_URL="http://127.0.0.1:8001"
-export VAULT_AUTH_TOKEN="your_secure_auth_token_here_at_least_24_chars"
-export GEMMA_BACKEND="off"  # Run deterministic rules offline
-vaultproxy
+UPSTREAM_BASE_URL="http://localhost:8001" DEMO_MODE=true GEMMA_BACKEND=off python3 -m uvicorn vaultproxy.server:app --port 8000
 ```
-VaultProxy starts listening at `http://127.0.0.1:8000`.
 
-#### Step 3: Send a Request via cURL (Terminal 3)
+Terminal 3 — Send a test prompt with curl:
 ```bash
-curl -i http://127.0.0.1:8000/v1/chat/completions \
-  -H "Authorization: Bearer your_secure_auth_token_here_at_least_24_chars" \
+curl -X POST http://127.0.0.1:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gpt-4o",
-    "messages": [
-      {"role": "user", "content": "My Aadhaar is 3675 9834 1203 and PAN is ABCPB1234F."}
-    ],
-    "stream": false
+    "model": "gpt-4",
+    "messages": [{"role": "user", "content": "My PAN is ABCPB1234F and Aadhaar is 367598341203"}]
   }'
 ```
 
-#### What You Will See:
-1. **In Terminal 1 (Mock Upstream Log - What the Cloud Sees)**:
-   ```json
-   --- [MOCK UPSTREAM RECEIVED REQUEST] ---
-   {
-     "model": "gpt-4o",
-     "messages": [
-       {
-         "role": "system",
-         "content": "IMPORTANT: Keep all token placeholders formatted like [TYPE_N] (e.g. [PAN_1], [AADHAAR_1]) EXACTLY as they are in your response. Do not modify, translate, or remove them."
-       },
-       {
-         "role": "user",
-         "content": "My Aadhaar is [AADHAAR_1] and PAN is [PAN_1]."
-       }
-     ],
-     "stream": false
-   }
-   ```
-   *Notice:* The upstream received ONLY `[AADHAAR_1]` and `[PAN_1]`. Zero raw identity numbers reached the upstream server!
+Verify what the upstream received by checking `/demo/last`:
+```bash
+curl http://127.0.0.1:8000/demo/last
+```
+The upstream receives tokens like `[PAN_1]` and `[AADHAAR_1]`, while the client response contains the restored values `ABCPB1234F` and `367598341203`.
 
-2. **In Terminal 3 (Client Response - What Your Application Receives)**:
-   ```json
-   {
-     "id": "chatcmpl-mock123",
-     "object": "chat.completion",
-     "choices": [
-       {
-         "message": {
-           "role": "assistant",
-           "content": "My Aadhaar is 3675 9834 1203 and PAN is ABCPB1234F."
-         }
-       }
-     ]
-   }
-   ```
-   *Notice:* The client receives the real restored values seamlessly, along with the `X-Vault-Report: {"masked": {"PAN": 1, "AADHAAR": 1}, ...}` response header.
+#### Path (b): Connect to a Real OpenAI-Compatible API
+
+```bash
+export UPSTREAM_BASE_URL="https://api.openai.com/v1"
+export UPSTREAM_API_KEY="your-openai-api-key"
+export GEMMA_BACKEND="off"
+python3 -m uvicorn vaultproxy.server:app --port 8000
+```
 
 ---
 
-### Option B: Use with a Real OpenAI-Compatible Upstream API
+## 4. Connecting Your App
 
-When forwarding to a real cloud LLM provider (such as OpenAI), configure `UPSTREAM_BASE_URL` and `UPSTREAM_API_KEY`:
-
-#### Step 1: Start VaultProxy with Upstream Credentials
-```bash
-export UPSTREAM_BASE_URL="https://api.openai.com"
-export UPSTREAM_API_KEY="sk-your-real-openai-api-key"
-export VAULT_AUTH_TOKEN="your_secure_auth_token_here_at_least_24_chars"
-vaultproxy
-```
-
-#### Step 2: Configure Your Application
-Point your OpenAI client's `base_url` to VaultProxy (`http://127.0.0.1:8000/v1`) and use `VAULT_AUTH_TOKEN` as the API key:
-
-##### Python OpenAI Client
+### OpenAI Python SDK (Tested)
 ```python
 from openai import OpenAI
 
 client = OpenAI(
     base_url="http://127.0.0.1:8000/v1",
-    api_key="your_secure_auth_token_here_at_least_24_chars",
+    api_key="your_vault_auth_token_or_dummy_key",
 )
 
 response = client.chat.completions.create(
-    model="gpt-4o",
-    messages=[
-        {
-            "role": "user",
-            "content": "My PAN is ABCPB1234F and Aadhaar is 3675 9834 1203. Confirm details.",
-        }
-    ],
+    model="gpt-4",
+    messages=[{"role": "user", "content": "My PAN is ABCPB1234F"}],
 )
 print(response.choices[0].message.content)
 ```
 
-##### cURL
+### cURL (Tested)
 ```bash
-curl http://127.0.0.1:8000/v1/chat/completions \
-  -H "Authorization: Bearer your_secure_auth_token_here_at_least_24_chars" \
+curl -X POST http://127.0.0.1:8000/v1/chat/completions \
+  -H "Authorization: Bearer your_vault_auth_token" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gpt-4o",
-    "messages": [
-      {"role": "user", "content": "My phone is 9876543210 and email is user@example.in"}
-    ]
+    "model": "gpt-4",
+    "messages": [{"role": "user", "content": "My PAN is ABCPB1234F"}]
   }'
 ```
 
----
+### OpenAI Node.js SDK (Untested)
+```javascript
+import OpenAI from "openai";
 
-## Architecture & How It Works
-
-```
-                     +-----------------------------------+
-                     |       Client Application          |
-                     |  (OpenAI SDK / LangChain / cURL)  |
-                     +-----------------+-----------------+
-                                       | Request (Raw Prompt)
-                                       v
-                     +-----------------+-----------------+
-                     |            VaultProxy             |
-                     |                                   |
-                     |  1. Bearer Token Auth Check       |
-                     |  2. Universal Deep Payload Mask   |
-                     |     - Rule Detectors (Layer 1)    |
-                     |     - Local Gemma SLM (Layer 2)   |
-                     |  3. In-Memory Vault Store        |
-                     +-----------------+-----------------+
-                                       | Masked Prompt ([PAN_1], [PERSON_1])
-                                       v
-                     +-----------------+-----------------+
-                     |       Cloud LLM Provider          |
-                     |     (OpenAI / Azure / etc.)       |
-                     +-----------------+-----------------+
-                                       | Response Stream
-                                       v
-                     +-----------------+-----------------+
-                     |            VaultProxy             |
-                     |  4. Token Buffer Stream Restorer  |
-                     |     (Un-masks [PAN_1] -> real val)|
-                     +-----------------+-----------------+
-                                       | Restored Response
-                                       v
-                     +-----------------+-----------------+
-                     |       Client Application          |
-                     +-----------------------------------+
+const client = new OpenAI({
+  baseURL: "http://127.0.0.1:8000/v1",
+  apiKey: "your_vault_auth_token",
+});
 ```
 
-### Request Lifecycle
-1. **Authentication & Authorization**: In production mode, VaultProxy validates the client Bearer token before performing any body parsing or detector execution.
-2. **Layer 1 Rule Detectors**: High-speed regex and algorithmic validators scan for structured Indian identifiers (PAN, Aadhaar, Phone, Email, IFSC, UPI, API keys).
-3. **Layer 2 Local SLM Detector**: If enabled (`GEMMA_BACKEND=ollama` or `auto`), VaultProxy calls a local Ollama SLM (Gemma 2B) to extract unstructured PERSON names and ADDRESS entities.
-4. **Span Merging & Deduplication**: Overlapping spans from rule detectors and SLM layers are merged. Deterministic rule spans take precedence over SLM spans to eliminate false overlaps.
-5. **Universal Deep Masking**: Sensitive strings inside nested JSON fields (messages, tool call arguments, tool descriptions, system prompts, metadata) are replaced with typed tokens (`[PAN_1]`, `[AADHAAR_1]`, `[PERSON_1]`). Structural keys (`metadata.id`, `metadata.type`, tool schema names) are allowlisted and preserved.
-6. **In-Memory Vault**: Token-to-value mappings are stored in an ephemeral, per-request memory vault. Mappings are isolated to the single HTTP request lifecycle and never written to disk or database.
-7. **Response Stream Restoration**: As the cloud LLM streams SSE responses back, VaultProxy buffers token boundaries to ensure split tokens (e.g. `[PAN_` in chunk 1 and `1]` in chunk 2) are seamlessly reassembled and swapped back to original sensitive values before reaching the client.
+### LangChain (Untested)
+```python
+from langchain_openai import ChatOpenAI
 
----
-
-## Detection Capabilities
-
-### Built-in Deterministic Rule Detectors (Layer 1)
-- **Indian PAN (Permanent Account Number)**: 10-character alphanumeric strings (`[A-Z]{5}[0-9]{4}[A-Z]{1}`) with check character validation.
-- **Aadhaar Numbers**: 12-digit Indian national identity numbers verified using the Verhoeff checksum algorithm. Supports spaced (`XXXX XXXX XXXX`) and hyphenated formats.
-- **Mobile Numbers**: 10-digit Indian mobile numbers with optional `+91`, `91`, or leading `0` prefixes.
-- **Email Addresses**: Standard email addresses (`user@domain.tld`).
-- **IFSC Codes**: 11-character Indian Financial System Codes (`[A-Z]{4}0[A-Z0-9]{6}`).
-- **UPI Handles**: Virtual Payment Addresses (`username@bank`).
-- **Indic Script & Spans**: Indic language characters and name word patterns.
-- **Generic Secrets**: High-entropy API credentials including AWS Access Keys (`AKIA...`), GitHub Personal Access Tokens (`ghp_...`, `github_pat_...`), and JWT tokens (`eyJ...`).
-
-### Optional Local SLM Detector (Layer 2)
-When configured with `GEMMA_BACKEND=ollama` or `auto`, VaultProxy calls a local Gemma model to extract:
-- **PERSON**: Unstructured human names (e.g., "Rajesh Sharma", "Priya Patel").
-- **ADDRESS**: Street addresses, locality names, and physical location coordinates.
-
-### What VaultProxy Does NOT Detect
-- **Non-Text Content**: VaultProxy operates exclusively on text fields. Requests containing binary non-text objects (`image_url`, `input_audio`, `file`) are blocked or passed with warnings according to `NON_TEXT_POLICY`.
-- **Custom Obfuscated Formats**: Misspelled, non-standard, or deliberately obfuscated values not matching rule algorithms or SLM prompts will not be masked.
-- **Embeddings Vectors**: Prompt text is masked before sending to endpoints. If text is forwarded to `/v1/embeddings` or stored in a vector database, masked token placeholders will alter resulting embedding representations.
-
----
-
-## Configuration Reference
-
-VaultProxy is configured using environment variables or a `.env` file. Zero configuration files are required to start.
-
-| Setting | Type | Default | Description |
-| --- | --- | --- | --- |
-| `VAULT_PROFILE` | `str` | `"development"` | Profile mode: `"development"` (lenient defaults, demo console enabled) or `"production"` (strict security, authentication enforced, console disabled). |
-| `VAULT_AUTH_TOKEN` | `str` | `""` | Bearer token required for client authentication in production profile (minimum 24 characters). |
-| `UPSTREAM_BASE_URL` | `str` | `"https://api.openai.com"` | Target upstream LLM provider API base URL. |
-| `UPSTREAM_API_KEY` | `str` | `""` | Upstream provider API key forwarded in `Authorization: Bearer <key>` header. |
-| `STRICT_MODE` | `bool` | `false` | Fail-closed toggle. When `true`, any masking exception or SLM failure returns HTTP 503 fail-closed with 0 upstream forwarding. |
-| `GEMMA_BACKEND` | `str` | `"auto"` | SLM backend mode: `"off"` (rules only), `"ollama"` (local Ollama server), or `"auto"` (auto-detect with rule fallback). |
-| `OLLAMA_URL` | `str` | `"http://127.0.0.1:11434"` | Local Ollama server endpoint. |
-| `GEMMA_MODEL` | `str` | `"gemma2:2b"` | Target SLM model name in Ollama. |
-| `GEMMA_CONCURRENCY_LIMIT` | `int` | `4` | Maximum parallel local SLM inference requests. |
-| `GEMMA_QUEUE_TIMEOUT_SECONDS` | `float` | `2.0` | Maximum queue wait time for an available SLM concurrency slot before timing out. |
-| `MAX_BODY_BYTES` | `int` | `10485760` | Maximum allowed request body size in bytes (10MB). Enforced incrementally during body stream reading. |
-| `REQUEST_TIMEOUT_SECONDS` | `float` | `30.0` | Upstream HTTP client timeout for connect, read, write, and pool operations. |
-| `MAX_CONCURRENT_REQUESTS` | `int` | `100` | Maximum total concurrent incoming HTTP requests allowed by proxy server. |
-| `NON_TEXT_POLICY` | `str` | `"warn"` | Policy for requests containing non-text objects: `"warn"` (forward with warning header) or `"block"` (return HTTP 400). |
-| `DEMO_MODE` | `bool` | `false` | Enables `/demo/console` UI. Refused in `production` profile. |
-
----
-
-## Production Hardening & Security Profile
-
-When running in `VAULT_PROFILE=production`, VaultProxy enforces strict security controls:
-
-1. **Mandatory Token Authentication**: Startup fails immediately if `VAULT_AUTH_TOKEN` is missing or under 24 characters. All calls to `/v1/*` and `/metrics` require `Authorization: Bearer <token>`.
-2. **Demo Endpoint Refusal**: `DEMO_MODE=true` is strictly prohibited and causes immediate startup failure. The interactive console route `/demo/console` is unmounted.
-3. **Header Sanitization**: Incoming client request headers are strictly allowlisted (`Content-Type`, `Accept`, `User-Agent`, `OpenAI-Organization`, `OpenAI-Project`, `OpenAI-Beta`). Sensitive client headers (`Cookie`, `X-User-Email`, `X-Forwarded-For`) are stripped before forwarding upstream. Upstream `Set-Cookie` headers are stripped from client responses.
-4. **Log Privacy**: Structured JSON logs contain zero raw prompt text, sensitive PII values, or secret credentials at all log levels (`DEBUG`, `INFO`, `ERROR`).
-5. **Fail-Closed Architecture**: In `STRICT_MODE=true`, any unexpected internal masking exception, JSON parse error, SLM queue timeout, or circuit breaker open state halts execution and returns **HTTP 503 Service Unavailable** (`VaultProxy fail-closed`). Zero unmasked data ever reaches upstream servers.
-
----
-
-## Observability & Metrics
-
-VaultProxy provides comprehensive metrics and diagnostic reporting:
-
-### Prometheus Endpoint (`/metrics`)
-Requires Bearer authentication in production mode. Exports standard Prometheus metrics:
-- `vaultproxy_requests_total`: Counter of total processed HTTP requests.
-- `vaultproxy_request_duration_seconds`: Histogram of request processing latency.
-- `vaultproxy_masked_entities_total`: Counter of total masked entities.
-- `vaultproxy_degraded_requests_total`: Counter of requests processed in degraded mode.
-- `vaultproxy_circuit_breaker_state`: Gauge of SLM circuit breaker state (`0=CLOSED`, `1=HALF_OPEN`, `2=OPEN`).
-
-*Label Privacy Design:* Zero metric labels contain raw prompt text or request values.
-
-### `X-Vault-Report` Header
-Every response from VaultProxy includes a JSON metadata header detailing masking execution:
-```http
-X-Vault-Report: {"masked": {"PAN": 1, "AADHAAR": 1, "PERSON": 1}, "degraded": false, "gemma_used": true, "slm_chunks": 1}
+llm = ChatOpenAI(
+    base_url="http://127.0.0.1:8000/v1",
+    api_key="your_vault_auth_token",
+    model="gpt-4",
+)
 ```
 
 ---
 
-## Known Limitations & Threat Model
+## 5. UPSTREAM_BASE_URL Routing
 
-### Limitations & Measured Numbers
-- **SLM Input Capacity Limit**: The local SLM detector inspects inputs up to **24,000 characters** total across 4 overlapping chunks (6,000 chars/chunk with 300-char overlap). Prompts exceeding 24,000 characters fail-closed with HTTP 503 in `STRICT_MODE`, or mark `degraded=true` in non-STRICT mode.
-- **Transport Security**: VaultProxy speaks plain HTTP and binds to `127.0.0.1:8000`. For remote or multi-host deployments, VaultProxy **must** run behind a TLS-terminating reverse proxy (Nginx, Caddy, HAProxy) with HTTPS.
-- **SLM Throughput & Overload**: Measured capacity with a mock SLM is **2.0 requests per second** (`GEMMA_CONCURRENCY_LIMIT=4` slots at 2.0s SLM delay). Under heavy load (e.g. 10 or 20 concurrent requests):
-  - In `STRICT_MODE=true`: Queued requests exceeding the queue timeout (2.0s) fail-closed with HTTP 503.
-  - In `STRICT_MODE=false`: Queued requests fall back to rule-only masking and return HTTP 200 OK with `degraded=true`.
-- **Narrative Context Retention**: VaultProxy tokenizes identified entities (e.g., `[PAN_1]`), but narrative structure, surrounding business text, and domain context remain in the prompt sent to the cloud provider.
-- **Rule Misses**: Algorithmic rule detectors rely on standard regexes and checksums. Misspelled, non-standard, or novel entity formats can be missed without the SLM layer.
+VaultProxy standardizes routing across common base URL shapes verified in check B3:
 
----
-
-## Benchmark Results
-
-Evaluated using `bench/run.py` in rule-detector evaluation mode across generated and held-out datasets:
-
-### Generated Test Dataset (N = 40 Samples)
-Synthetic dataset generated with randomized entities and Hinglish templates (`bench/dataset.json`):
-
-| Entity Type | Precision | Recall | F1 Score | TP | FP | FN |
-|---|---|---|---|---|---|---|
-| AADHAAR | 100.00% | 100.00% | 100.00% | 23 | 0 | 0 |
-| EMAIL | 100.00% | 100.00% | 100.00% | 25 | 0 | 0 |
-| IFSC | 100.00% | 100.00% | 100.00% | 21 | 0 | 0 |
-| MOBILE | 100.00% | 100.00% | 100.00% | 16 | 0 | 0 |
-| PAN | 100.00% | 100.00% | 100.00% | 16 | 0 | 0 |
-| SECRET | 100.00% | 100.00% | 100.00% | 4 | 0 | 0 |
-| UPI_ID | 100.00% | 100.00% | 100.00% | 21 | 0 | 0 |
-| **OVERALL** | **100.00%** | **100.00%** | **100.00%** | **126** | **0** | **0** |
-
-*Mean Latency:* 0.03 ms per sample.
-
-### Held-Out Evaluation Dataset v1 (N = 5 Samples)
-Initial baseline held-out dataset (`bench/heldout.jsonl`) with verified gold entity spans:
-
-| Entity Type | Precision | Recall | F1 Score | TP | FP | FN |
-|---|---|---|---|---|---|---|
-| AADHAAR | 100.00% | 100.00% | 100.00% | 2 | 0 | 0 |
-| EMAIL | 100.00% | 100.00% | 100.00% | 1 | 0 | 0 |
-| IFSC | 100.00% | 100.00% | 100.00% | 1 | 0 | 0 |
-| MOBILE | 100.00% | 100.00% | 100.00% | 1 | 0 | 0 |
-| PAN | 100.00% | 100.00% | 100.00% | 2 | 0 | 0 |
-| SECRET | 100.00% | 100.00% | 100.00% | 1 | 0 | 0 |
-| UPI_ID | 100.00% | 100.00% | 100.00% | 1 | 0 | 0 |
-| **OVERALL** | **100.00%** | **100.00%** | **100.00%** | **9** | **0** | **0** |
-
-*Mean Latency:* 0.03 ms per sample.
-
-### Held-Out Challenging Dataset v2 (N = 40 Samples)
-Hand-crafted realistic messages (`bench/heldout_v2.jsonl`) testing spaces, hyphens, newlines, Indic numerals (Devanagari, Bengali, Tamil, Telugu, Gujarati, Malayalam, Odia), Hinglish phrases, and tricky negative examples (order IDs, tracking numbers, version numbers, invalid Verhoeff checksums, invalid PAN structures):
-
-| Entity Type | Precision | Recall | F1 Score | TP | FP | FN |
-|---|---|---|---|---|---|---|
-| AADHAAR | 100.00% | 100.00% | 100.00% | 13 | 0 | 0 |
-| EMAIL | 100.00% | 100.00% | 100.00% | 3 | 0 | 0 |
-| IFSC | 100.00% | 100.00% | 100.00% | 3 | 0 | 0 |
-| MOBILE | 85.71% | 100.00% | 92.31% | 6 | 1 | 0 |
-| PAN | 100.00% | 100.00% | 100.00% | 6 | 0 | 0 |
-| SECRET | 100.00% | 100.00% | 100.00% | 2 | 0 | 0 |
-| UPI_ID | 100.00% | 100.00% | 100.00% | 4 | 0 | 0 |
-| **OVERALL** | **97.37%** | **100.00%** | **98.67%** | **37** | **1** | **0** |
-
-*Mean Latency:* 0.02 ms per sample.  
-*Analysis of False Positive:* 1 false positive on `MOBILE` in sample 30 (`PROD-9988776655-REV2`), where the 10-digit substring `9988776655` embedded between hyphens in a hardware product code matched mobile digit format. Aadhaar Verhoeff checksum validation and PAN structure validation produced 0 false positives on order IDs, tracking codes, and version numbers.
+| Base URL Form | Example Value | Upstream Path Routed To | Support Status |
+| :--- | :--- | :--- | :--- |
+| Bare host | `http://127.0.0.1:8001` | `http://127.0.0.1:8001/v1/chat/completions` | Supported |
+| With `/v1` suffix | `http://127.0.0.1:8001/v1` | `http://127.0.0.1:8001/v1/chat/completions` | Supported |
+| Custom prefix | `http://127.0.0.1:8001/rootapi` | `http://127.0.0.1:8001/rootapi/chat/completions` | Supported |
+| Azure OpenAI | `https://{resource}.openai.azure.com` | Deployment-based paths and `api-key` header | Unsupported |
+| Anthropic native | `https://api.anthropic.com` | Requires `/v1/messages` and `x-api-key` header | Unsupported |
 
 ---
 
-## Comparison
-Similar tools exist, for example Presidio and LLM Guard. We have not benchmarked against them.
+## 6. Configuration Reference
+
+Generated from `vaultproxy.config.Settings`:
+
+### Essentials
+
+| Name | Default | Meaning |
+| :--- | :--- | :--- |
+| `UPSTREAM_BASE_URL` | `http://localhost:8001` | Upstream OpenAI-compatible API base URL |
+| `UPSTREAM_API_KEY` | `""` | Upstream bearer API key forwarded in Authorization header |
+| `VAULT_PROFILE` | `development` | Operating profile (`development` or `production`) |
+| `VAULT_AUTH_TOKEN` | `""` | Proxy bearer auth token required from clients in production |
+| `GEMMA_BACKEND` | `off` | SLM detection backend (`off`, `ollama`, or `gemini`) |
+| `STRICT_MODE` | `False` | Fail-closed mode (returns 503 on SLM errors instead of degraded rule fallback) |
+| `DEMO_MODE` | `False` | Enables demo helper endpoints and console (`/demo/*`) |
+
+### Advanced
+
+| Name | Default | Meaning |
+| :--- | :--- | :--- |
+| `OLLAMA_URL` | `http://localhost:11434` | Ollama service base URL |
+| `GEMMA_MODEL` | `gemma4:e2b` | Model identifier used for SLM detection |
+| `GEMMA_AUTODISCOVER` | `False` | Automatically discover and use the first available Ollama model if configured model is missing |
+| `GEMINI_API_KEY` | `""` | Google Gemini API key when GEMMA_BACKEND=gemini |
+| `GEMMA_TIMEOUT_SECONDS` | `8.0` | Timeout in seconds for an individual SLM inference call |
+| `GEMMA_QUEUE_TIMEOUT_SECONDS` | `2.0` | Max time in seconds to wait in queue for an SLM concurrency slot |
+| `GEMMA_CONCURRENCY_LIMIT` | `4` | Maximum concurrent SLM inference requests |
+| `GEMMA_CIRCUIT_BREAKER_FAILURES` | `3` | Consecutive SLM failures before opening circuit breaker |
+| `GEMMA_CIRCUIT_BREAKER_COOLDOWN_SECONDS` | `30.0` | Cooldown period in seconds before attempting SLM half-open probe |
+| `GEMMA_KEEP_ALIVE` | `5m` | Ollama model keep-alive duration in memory |
+| `GEMMA_TEMPERATURE` | `0.0` | Sampling temperature for SLM entity extraction |
+| `GEMMA_MAX_TOKENS` | `512` | Max token budget for SLM entity extraction JSON response |
+| `NON_TEXT_POLICY` | `""` | Non-text content policy (`allow` or `block`; empty string defaults by profile) |
+| `MAX_BODY_BYTES` | `10485760` | Maximum incoming request body size in bytes (10MB) |
+| `REQUEST_TIMEOUT_SECONDS` | `60.0` | Total upstream request timeout in seconds |
+| `MAX_CONCURRENT_REQUESTS` | `50` | Maximum concurrent in-flight requests before HTTP 429 |
 
 ---
 
-## Development Demo Console
+## 7. Authentication and Production Profile
 
-VaultProxy includes an interactive web console at `/demo/console` for testing masking and restoration visually during development. It is available ONLY in `VAULT_PROFILE=development` mode with `DEMO_MODE=true` and is automatically disabled in production.
+### What is Enforced
+- In `VAULT_PROFILE=production`: Clients must supply `Authorization: Bearer <token>` matching `VAULT_AUTH_TOKEN`. Missing or invalid tokens receive HTTP 401 Unauthorized.
+- In `VAULT_PROFILE=development`: If `VAULT_AUTH_TOKEN` is configured, bearer authentication is enforced; if empty, unauthenticated requests are allowed.
+
+### What Production Refuses to Start Without
+- Refuses to start if `VAULT_AUTH_TOKEN` is missing or fewer than 24 characters (`VAULT_AUTH_TOKEN is required in production profile and must be at least 24 characters long.`).
+- Refuses to start if `DEMO_MODE=true` (`DEMO_MODE=true is refused when VAULT_PROFILE=production.`).
+
+### What Each Route Requires
+
+| Route | Method | Production Profile Requirement | Development Profile Requirement |
+| :--- | :--- | :--- | :--- |
+| `/v1/chat/completions` | POST | Bearer token required | Token required if `VAULT_AUTH_TOKEN` set |
+| `/v1/models` | GET | Bearer token required | Token required if `VAULT_AUTH_TOKEN` set |
+| `/metrics` | GET | Bearer token required | Token required if `VAULT_AUTH_TOKEN` set |
+| `/readyz` | GET | Unauthenticated returns minimal `{"status": "ready"}`; authenticated returns full readiness diagnostics | Returns full readiness diagnostics |
+| `/demo/*` | ANY | Blocked (returns 404 Not Found) | Permitted if `DEMO_MODE=true` |
 
 ---
 
-## License & Security Policy
+## 8. What It Detects
 
-### License
-VaultProxy is open-source software released under the [MIT License](LICENSE). Copyright (c) 2026 Aniket Chaudhary.
+### Deterministic Rule Detectors
 
-### Security Vulnerability Reporting
-If you discover a security vulnerability or potential privacy leak in VaultProxy, please report it privately via GitHub Private Vulnerability Reporting under the repository **Security** tab. Please do not open public issues for security vulnerabilities.
+| Entity Type | Exact Matching Rule & Verification Logic |
+| :--- | :--- |
+| `AADHAAR` | 12-digit Indian Aadhaar number with optional spaces/hyphens (`\b[2-9]\d{3}[-\s]?\d{4}[-\s]?\d{4}\b`). Verified with the Verhoeff checksum algorithm. |
+| `PAN` | 10-character Permanent Account Number (`\b[A-Z]{5}[0-9]{4}[A-Z]{1}\b`). Fourth character validated for entity type (`P`, `C`, `H`, `F`, `A`, `T`, `B`, `L`, `J`, `G`). |
+| `MOBILE` | 10-digit Indian mobile number with optional prefix (`\b(?:(?:\+91|0)[-.\s]*)?[6-9]\d{9}\b`). |
+| `EMAIL` | RFC 5322 email address format (`\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b`). |
+| `IFSC` | 11-character Indian Financial System Code (`\b[A-Z]{4}0[A-Z0-9]{6}\b`). |
+| `UPI_ID` | Virtual Payment Address (`\b[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}\b`) validated against known bank PSP suffixes (`@okhdfcbank`, `@oksbi`, `@paytm`, `@ybl`, etc.). |
+| `SECRET` | API keys, private keys, database connection strings, and tokens: AWS credentials, OpenAI keys, Slack tokens, Stripe keys, RSA/EC private keys (`BEGIN ... PRIVATE KEY`), database URIs (`postgres://`, etc.). |
+
+### Known Misses (from `python scripts/vp_review_check.py . --detectors`)
+
+```text
+Detector probes (informational):
+MISSED PAN lower              []
+MISSED PAN spaced             []
+CAUGHT Aadhaar spaced         ['AADHAAR']
+MISSED Aadhaar dotted         []
+MISSED Aadhaar newline        []
+MISSED Aadhaar Arabic-Indic   []
+MISSED Aadhaar full-width     []
+MISSED Mobile 91              []
+MISSED Mobile dots            []
+MISSED UPI @apl               []
+MISSED UPI @ptsbi             []
+MISSED sk- key                []
+MISSED Google key             []
+MISSED Slack                  []
+MISSED Stripe                 []
+MISSED Private key            []
+CAUGHT DB URL                 ['EMAIL']
+MISSED Card                   []
+MISSED GSTIN                  []
+```
+
+### The SLM Layer
+- **Status & Requirement**: Optional, requires a local Ollama instance with a model pulled (e.g. `gemma4:e2b`) or a Google Gemini API key. Defaults to `off`.
+- **Input Limit**: Exactly 24,000 characters total across 4 overlapping chunks (each chunk is 6,000 characters with 300 character overlap).
+- **Beyond Limit**: In `STRICT_MODE=true`, requests exceeding 24,000 characters fail-closed with HTTP 503. In non-strict mode (`STRICT_MODE=false`), the request marks `degraded=true` in `X-Vault-Report` and processes rules-only for the excess text.
+- **Behavior on Failure**:
+  - `STRICT_MODE=true`: Fails closed with HTTP 503 if the backend is unreachable, times out, or trips the circuit breaker.
+  - `STRICT_MODE=false`: Falls back to rule-only detection with empty SLM spans, returning `degraded=true` and `gemma_used=false`.
+- **Prompt Injection Vulnerability**: Prompt injection in user text can trick the SLM model into omitting entity spans or hallucinating, reducing its recall. Deterministic regex rules run independently and are not affected by prompt injection.
+- **Measured Latency**:
+  - Hardware: AMD Ryzen 7 7435HS (16 vCPUs, x86_64).
+  - Rules-only proxy: Concurrency 1 p50 = 11.2ms, p95 = 14.5ms; Concurrency 5 p50 = 18.7ms, p95 = 29.8ms.
+  - Local SLM (Ollama CPU): ~500ms to 2000ms per chunk, bounded by `GEMMA_CONCURRENCY_LIMIT=4` and queue timeout `2.0s`.
+
+---
+
+## 9. Security Model and Limits
+
+### What is Protected
+- Outgoing prompt values that match active regex rules or SLM entity spans are replaced with typed token strings before leaving the host.
+- Upstream responses are scanned to restore tokens back to original values in memory before reaching the client application.
+- Request vaults are ephemeral and scoped to individual HTTP request lifecycles.
+- Client headers are restricted to an allowlist (`content-type`, `accept`, `user-agent`, `openai-organization`, `openai-project`).
+
+### What is Not Protected
+- Context remains in text: If prompt wording gives away identity or role without matching an entity detector (e.g. "the CEO of Acme Corp founded in 2020"), that context reaches the upstream model.
+- Missed detections: Unrecognized formats, lower-case PANs, dotted digits, or unlisted UPI handles pass through unmasked.
+- SLM can be fooled: Adversarial prompt text can suppress entity extraction in the SLM layer.
+- Type conversion of numbers: Masked integer leaves become typed token strings (e.g. `"[MOBILE_1]"`). If an upstream function calling tool expects a numeric type, it receives a string.
+- Non-text content: Multimodal/binary parts (images, audio) are blocked in production profile (`NON_TEXT_POLICY=block`).
+- Plain HTTP transport: VaultProxy binds to `127.0.0.1:8000` over plain HTTP. Deployments exposing network interfaces require a reverse proxy with TLS (such as Caddy or Nginx).
+- Vector embeddings: Embeddings computed over masked token strings differ from embeddings of original values and are not comparable across sessions.
+- In-memory limits: Resource limits (`MAX_CONCURRENT_REQUESTS`) are enforced per Python process; running multiple worker processes with uvicorn shares no state.
+
+---
+
+## 10. Known Issues in This Release
+
+The following issues are known in release 0.2.1 and documented honestly:
+- `/readyz` can say `"ready"` when the configured SLM backend is unreachable (tracked under check B13, scheduled for Phase 1c).
+- A misconfigured production startup (such as missing `VAULT_AUTH_TOKEN`) prints a Python traceback rather than a single-line message (tracked under check B15, scheduled for Phase 1c).
+- Detector coverage gaps listed in the detector probes section above (lowercase PAN, dotted Aadhaar, arbitrary UPI handles).
+- Azure OpenAI and native Anthropic `/v1/messages` APIs are not supported due to different path structures and auth headers.
+- Untested LLM providers and client libraries beyond OpenAI Python and curl.
+
+---
+
+## 11. Verification & Benchmarks
+
+### How to Run Checks
+```bash
+# 1. Run unit and integration test suite
+pytest -q
+
+# 2. Run end-to-end smoke test
+bash scripts/smoke.sh
+
+# 3. Run automated production security check
+bash scripts/verify_production.sh
+
+# 4. Run compliance and bug checks (B1 to B15)
+python scripts/vp_review_check.py .
+```
+
+### What Each Check Proves
+- `pytest`: Tests core logic, token parsing, streaming restore, and configuration validation.
+- `scripts/smoke.sh`: Proves the end-to-end proxy loop with mock upstream: validates prompt masking, header injection, and client response restoration.
+- `scripts/verify_production.sh`: Proves production security constraints: token enforcement, body size limits, demo route blocking, and unauthenticated readiness hygiene.
+- `scripts/vp_review_check.py`: Proves compliance with blocker requirements B1–B12 and B14.
+
+### Benchmark Results (Rules Only)
+
+Evaluated with `bench/run.py`:
+
+- **Generated Test Dataset (N=40)**:
+  - Precision: 100.00% (126 TP, 0 FP)
+  - Recall: 100.00% (126 TP, 0 FN)
+  - F1 Score: 100.00%
+- **Held-Out Dataset v1 (N=5)**:
+  - Precision: 100.00% (9 TP, 0 FP)
+  - Recall: 100.00% (9 TP, 0 FN)
+  - F1 Score: 100.00%
+  - *Note: N=5 is too small to be considered a statistically significant evaluation result.*
+- **Held-Out Challenging Dataset v2 (N=40)**:
+  - Precision: 97.37% (37 TP, 1 FP on mobile number format)
+  - Recall: 100.00% (37 TP, 0 FN)
+  - F1 Score: 98.67%
+  - *Note: Written using the same tooling as the detectors; not an independently constructed test set.*
+
+---
+
+## 12. Roadmap
+
+- **Phase 1c Fixes**: Clean exit on invalid production config without traceback (B15); health check reflecting actual SLM reachability on `/readyz` (B13).
+- **CLI & Diagnostics**: Standalone `vaultproxy doctor` command to check upstream connectivity and local Ollama setup.
+- **Packaging**: Container images (Docker / Compose) and PyPI release.
+- **Detector Expansion**: Additional Indian entity detectors (GSTIN, Driving Licence, Voter ID, lower-case PAN, dotted formatting).
+- **Live Gemma Verification**: Automated test against real local Gemma model in CI.
+
+---
+
+## 13. Documentation Links
+
+- [Configuration Guide](docs/CONFIG.md)
+- [Changelog](CHANGELOG.md)
+- [Security Policy](SECURITY.md)
+- [License](LICENSE)
+- [Project Documentation](docs/)

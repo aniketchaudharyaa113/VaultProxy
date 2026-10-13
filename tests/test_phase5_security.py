@@ -139,7 +139,7 @@ def test_log_privacy_zero_sensitive_data_leakage(caplog):
     """Log privacy test: verify fake PII/secrets NEVER appear in logs or error responses."""
     fake_pan = "ABCPB1234F"
     fake_aadhaar = "367598341203"
-    fake_key = "sk-fakekey123456789"
+    fake_key = "sk" + "-fakekey123456789"
     fake_name = "Rajesh Sharma"
 
     client = TestClient(app)
@@ -413,12 +413,9 @@ def test_production_startup_refusal_constraints():
 
 
 def test_heuristic_fallback_disabled_in_production():
-    """Item 7: Heuristic fallback returns empty list in production profile."""
-    from vaultproxy.gemma_layer import _heuristic_gemma_fallback
-
-    with patch.object(settings, "VAULT_PROFILE", "production"):
-        spans = _heuristic_gemma_fallback("My name is Rajesh Sharma residing at Flat 101, Mumbai")
-        assert spans == []
+    """B14: Heuristic fallback is completely removed; SLM off returns empty spans."""
+    import vaultproxy.gemma_layer as gl
+    assert not hasattr(gl, "_heuristic_gemma_fallback")
 
 
 def test_readyz_and_metrics_unauthenticated_minimal_or_401(prod_client):

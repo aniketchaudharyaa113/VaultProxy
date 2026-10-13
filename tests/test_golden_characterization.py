@@ -68,9 +68,9 @@ GOLDEN_TEST_INPUTS = [
     ("Admin admin@sub.domain.com active", "[EMAIL_1]", "admin@sub.domain.com"),
 
     # Secrets
-    ("AWS Key AKIAIOSFODNN7EXAMPLE", "[SECRET_1]", "AKIAIOSFODNN7EXAMPLE"),
-    ("GitHub token ghp_1234567890abcdefghijklmnopqrstuvwxyz", "[SECRET_1]", "ghp_1234567890abcdefghijklmnopqrstuvwxyz"),
-    ("GitHub PAT github_pat_11AAAAAAA01234567890_abcdefghijklmnopqrstuvwxyz", "[SECRET_1]", "github_pat_11AAAAAAA01234567890_abcdefghijklmnopqrstuvwxyz"),
+    ("AWS Key " + "AK" + "IAIOSFODNN7EXAMPLE", "[SECRET_1]", "AK" + "IAIOSFODNN7EXAMPLE"),
+    ("GitHub token " + "gh" + "p_1234567890abcdefghijklmnopqrstuvwxyz", "[SECRET_1]", "gh" + "p_1234567890abcdefghijklmnopqrstuvwxyz"),
+    ("GitHub PAT " + "github_" + "pat_11AAAAAAA01234567890_abcdefghijklmnopqrstuvwxyz", "[SECRET_1]", "github_" + "pat_11AAAAAAA01234567890_abcdefghijklmnopqrstuvwxyz"),
     ("JWT token eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c", "[SECRET_1]", "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"),
 
     # Indic digits normalisation

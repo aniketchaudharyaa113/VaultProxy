@@ -29,12 +29,20 @@ def is_candidate_for_slm(text: str) -> bool:
     return True
 
 
+NON_TEXT_CONTENT_TYPES = {"image_url", "input_audio", "file"}
+
+
 def has_non_text_parts(obj: Any) -> bool:
-    """Check if payload contains non-text content (image_url, input_audio, file)."""
+    """Check if payload contains non-text content parts (image_url, input_audio, file).
+
+    Only flags objects where the 'type' field is explicitly set to one of the
+    non-text content part types.  Dicts that merely *contain* a key named
+    'file' or 'image_url' (e.g. tool schemas, metadata) are NOT flagged.
+    """
     if isinstance(obj, dict):
-        if any(k in obj for k in ("image_url", "input_audio", "file")):
-            return True
-        if obj.get("type") in ("image_url", "input_audio", "file"):
+        # A content part is non-text only if its 'type' key is a string matching non-text types
+        t = obj.get("type")
+        if isinstance(t, str) and t in NON_TEXT_CONTENT_TYPES:
             return True
         return any(has_non_text_parts(v) for v in obj.values())
     elif isinstance(obj, list):
@@ -96,6 +104,80 @@ def chunk_combined_text(
     return chunks
 
 
+TOP_LEVEL_EXCLUDED_PARAMS = {
+    "max_tokens",
+    "max_completion_tokens",
+    "n",
+    "seed",
+    "temperature",
+    "top_p",
+    "presence_penalty",
+    "frequency_penalty",
+    "logprobs",
+    "top_logprobs",
+    "logit_bias",
+    "model",
+    "stream",
+}
+
+STRUCTURAL_DICT_KEYS = {
+    "role",
+    "content",
+    "type",
+    "id",
+    "name",
+    "function",
+    "tool_calls",
+    "arguments",
+    "tools",
+    "messages",
+    "model",
+    "stream",
+    "parameters",
+    "properties",
+    "required",
+    "description",
+    "tool_call_id",
+    "refusal",
+    "audio",
+}
+
+PLACEHOLDER_INSTRUCTION = (
+    "IMPORTANT: Keep all token placeholders formatted like [TYPE_N] "
+    "(e.g. [PAN_1], [AADHAAR_1]) EXACTLY as they are in your response. "
+    "Do not modify, translate, or remove them."
+)
+
+
+def _is_scannable_scope(path: list[Any]) -> bool:
+    """Check if current path is inside messages, tool-call arguments, or metadata,
+    and NOT under logit_bias or excluded top-level settings."""
+    if not path:
+        return False
+    if "logit_bias" in path:
+        return False
+    if path[0] in ("messages", "metadata"):
+        return True
+    if any(p in ("tool_calls", "arguments") for p in path):
+        return True
+    return False
+
+
+def _match_whole_detector(text: str) -> Span | None:
+    """Return Span if rule detectors match the ENTIRE string from index 0 to len(text)."""
+    if not text:
+        return None
+    spans = run_rule_detectors(text)
+    whole = [s for s in spans if s.start == 0 and s.end == len(text)]
+    if not whole:
+        return None
+    merged = merge_spans(whole)
+    for s in merged:
+        if s.start == 0 and s.end == len(text):
+            return s
+    return None
+
+
 class MaskingEngine:
     """Handles request payload masking, structural allowlisting, and SLM chunking."""
 
@@ -105,12 +187,28 @@ class MaskingEngine:
     async def mask_payload(
         self, body_json: dict[str, Any]
     ) -> tuple[dict[str, Any], bool, bool, int]:
-        """Deep-walk request payload, scanning every string value except structural allowlist positions."""
+        """Deep-walk request payload, scanning every string value, integer leaf, and dictionary key."""
         collected_strings: list[tuple[str, list[Any]]] = []
 
         def _collect(obj: Any, path: list[Any]) -> None:
             if isinstance(obj, dict):
                 for k, v in obj.items():
+                    # Top-level excluded parameter check:
+                    if len(path) == 0 and k in TOP_LEVEL_EXCLUDED_PARAMS:
+                        continue
+                    if "logit_bias" in path:
+                        continue
+
+                    # Scan dict key if inside scannable scope
+                    if (
+                        _is_scannable_scope(path + [k])
+                        and isinstance(k, str)
+                        and k not in STRUCTURAL_DICT_KEYS
+                    ):
+                        span = _match_whole_detector(k)
+                        if span is not None:
+                            self.vault.get_or_create_token(k, span.type)
+
                     if is_exact_structural_allowlist_position(k, path) and isinstance(
                         v, str
                     ):
@@ -129,6 +227,11 @@ class MaskingEngine:
                     _collect(item, path + [idx])
             elif isinstance(obj, str):
                 collected_strings.append((obj, path))
+            elif isinstance(obj, int) and not isinstance(obj, bool):
+                if _is_scannable_scope(path):
+                    span = _match_whole_detector(str(obj))
+                    if span is not None:
+                        self.vault.get_or_create_token(str(obj), span.type)
 
         _collect(body_json, [])
 
@@ -219,21 +322,69 @@ class MaskingEngine:
             if isinstance(obj, dict):
                 res: dict[str, Any] = {}
                 for k, v in obj.items():
+                    # Top-level excluded parameter check:
+                    if len(path) == 0 and k in TOP_LEVEL_EXCLUDED_PARAMS:
+                        res[k] = v
+                        continue
+                    if "logit_bias" in path:
+                        res[k] = v
+                        continue
+
+                    # Mask dict key if eligible
+                    new_k = k
+                    if (
+                        _is_scannable_scope(path + [k])
+                        and isinstance(k, str)
+                        and k not in STRUCTURAL_DICT_KEYS
+                    ):
+                        span = _match_whole_detector(k)
+                        if span is not None:
+                            new_k = self.vault.get_or_create_token(k, span.type)
+
                     if len(path) == 0 and k == "messages" and isinstance(v, list):
-                        system_msg = {
-                            "role": "system",
-                            "content": "IMPORTANT: Keep all token placeholders formatted like [TYPE_N] (e.g. [PAN_1], [AADHAAR_1]) EXACTLY as they are in your response. Do not modify, translate, or remove them.",
-                        }
-                        reconstructed_messages = [system_msg]
-                        for idx, m in enumerate(v):
-                            reconstructed_messages.append(
-                                _reconstruct(m, path + [k, idx])
-                            )
-                        res[k] = reconstructed_messages
+                        reconstructed_messages = [
+                            _reconstruct(m, path + [k, idx])
+                            for idx, m in enumerate(v)
+                        ]
+                        if self.vault.has_tokens:
+                            if (
+                                reconstructed_messages
+                                and isinstance(reconstructed_messages[0], dict)
+                                and reconstructed_messages[0].get("role")
+                                in ("system", "developer")
+                            ):
+                                first_msg = dict(reconstructed_messages[0])
+                                existing_content = first_msg.get("content")
+                                if (
+                                    isinstance(existing_content, str)
+                                    and existing_content.strip()
+                                ):
+                                    first_msg["content"] = (
+                                        f"{existing_content}\n\n{PLACEHOLDER_INSTRUCTION}"
+                                    )
+                                elif isinstance(existing_content, list):
+                                    first_msg["content"] = list(
+                                        existing_content
+                                    ) + [
+                                        {
+                                            "type": "text",
+                                            "text": PLACEHOLDER_INSTRUCTION,
+                                        }
+                                    ]
+                                else:
+                                    first_msg["content"] = PLACEHOLDER_INSTRUCTION
+                                reconstructed_messages[0] = first_msg
+                            else:
+                                system_msg = {
+                                    "role": "system",
+                                    "content": PLACEHOLDER_INSTRUCTION,
+                                }
+                                reconstructed_messages.insert(0, system_msg)
+                        res[new_k] = reconstructed_messages
                     elif is_exact_structural_allowlist_position(k, path) and isinstance(
                         v, str
                     ):
-                        res[k] = v
+                        res[new_k] = v
                     elif k == "arguments" and isinstance(v, str):
                         try:
                             parsed_args = json.loads(v)
@@ -241,14 +392,14 @@ class MaskingEngine:
                                 reconstructed_args = _reconstruct(
                                     parsed_args, path + [k]
                                 )
-                                res[k] = json.dumps(reconstructed_args)
+                                res[new_k] = json.dumps(reconstructed_args)
                                 continue
                         except Exception:
                             pass
-                        res[k] = masked_string_map[str_counter]
+                        res[new_k] = masked_string_map[str_counter]
                         str_counter += 1
                     else:
-                        res[k] = _reconstruct(v, path + [k])
+                        res[new_k] = _reconstruct(v, path + [k])
                 return res
             elif isinstance(obj, list):
                 return [
@@ -258,7 +409,14 @@ class MaskingEngine:
                 m_val = masked_string_map[str_counter]
                 str_counter += 1
                 return m_val
+            elif isinstance(obj, int) and not isinstance(obj, bool):
+                if _is_scannable_scope(path):
+                    span = _match_whole_detector(str(obj))
+                    if span is not None:
+                        return self.vault.get_or_create_token(str(obj), span.type)
+                return obj
             return obj
 
         masked_payload = _reconstruct(body_json, [])
         return masked_payload, any_degraded, any_gemma_used, slm_chunks_count
+

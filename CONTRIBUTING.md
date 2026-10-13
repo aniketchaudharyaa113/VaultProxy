@@ -7,6 +7,7 @@ Thank you for contributing! VaultProxy follows strict local-first privacy princi
 1. **Fail-Closed Principle**: Never change error-handling behavior to expose raw PII. Any unexpected error in detection or masking MUST return HTTP 503 and forward nothing.
 2. **Zero PII in Logs**: Logs may contain entity types and counts only. Never log raw prompts, replies, or detected values.
 3. **Fake Test Data Only**: All test data must be synthetic and fake.
+4. **Runtime Secret Construction**: Test fixtures that look like secrets must be built at runtime from pieces, never written as full literals.
 
 ## Adding a New Detector in 2 Steps
 

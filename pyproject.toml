@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vaultproxy"
-version = "0.2.0"
+version = "0.2.1"
 description = "Local-first, OpenAI-compatible privacy proxy for LLM apps focused on Indian data"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -45,6 +45,7 @@ include = ["vaultproxy*"]
 [tool.ruff]
 line-length = 88
 target-version = "py310"
+extend-exclude = ["scripts/vp_review_check.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]

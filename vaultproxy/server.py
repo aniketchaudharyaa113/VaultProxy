@@ -41,6 +41,37 @@ app = FastAPI(title="VaultProxy")
 app.include_router(demo_router)
 app.include_router(health_router)
 
+
+@app.exception_handler(HTTPException)
+async def _http_exception_with_request_id(
+    request: Request, exc: HTTPException
+) -> JSONResponse:
+    """Wrap all HTTPException responses with an x-request-id header and ensure
+    the body is an OpenAI-compatible error object for 4xx/5xx responses."""
+    req_id = str(uuid.uuid4())
+    detail = exc.detail
+    if isinstance(detail, str):
+        body = {
+            "error": {
+                "message": detail,
+                "type": "invalid_request_error" if exc.status_code < 500 else "server_error",
+            },
+            "detail": detail,
+        }
+    elif isinstance(detail, dict) and "error" in detail:
+        body = dict(detail)
+        body.setdefault("detail", detail["error"].get("message", str(detail)))
+    else:
+        body = {
+            "error": {"message": str(detail), "type": "server_error"},
+            "detail": str(detail),
+        }
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=body,
+        headers={"x-request-id": req_id},
+    )
+
 if os.path.exists("demo/console"):
     app.mount(
         "/demo/console",
@@ -134,6 +165,12 @@ def get_concurrency_semaphore() -> asyncio.Semaphore:
 
 @app.on_event("startup")
 async def startup_event() -> None:
+    protection_str = (
+        "rules only"
+        if settings.GEMMA_BACKEND.lower() == "off"
+        else f"rules + {settings.GEMMA_MODEL}"
+    )
+    logger.info(f"Protection: {protection_str}")
     logger.info(
         f"VaultProxy starting up. Profile: {settings.VAULT_PROFILE}. "
         "Maximum SLM input size: 24,000 chars (4 chunks x 6,000 chars with 300-char overlap). "
@@ -241,7 +278,7 @@ async def parse_and_validate_request_body(request: Request) -> tuple[bytes, dict
         )
     except json.JSONDecodeError:
         raise HTTPException(
-            status_code=503, detail="VaultProxy fail-closed: Internal masking failure."
+            status_code=400, detail="Request body is not valid JSON."
         )
 
     return body_bytes, body_json
@@ -585,16 +622,17 @@ async def chat_completions(request: Request) -> Response:
                 model_name = body_json.get("model", "proxy-model")
 
                 async def sem_holding_stream() -> AsyncGenerator[str, None]:
-                    nonlocal slot_held
+                    # Note: slot_held is NOT checked here — we unconditionally
+                    # release because the outer finally already set slot_held=False
+                    # to signal it handed ownership to this generator.
                     try:
                         async for chunk in process_sse_stream(
                             upstream_resp, client, vault, model_name
                         ):
                             yield chunk
                     finally:
-                        if slot_held:
-                            sem.release()
-                            slot_held = False
+                        # Always release: this generator now owns the slot.
+                        sem.release()
                         ms = round((time.perf_counter() - t0) * 1000, 2)
                         logger.info(
                             json.dumps(
@@ -615,6 +653,8 @@ async def chat_completions(request: Request) -> Response:
                             circuit_breaker.state,
                         )
 
+                # Transfer slot ownership to the generator; clear slot_held so
+                # the outer finally does NOT double-release.
                 slot_held = False
                 res = StreamingResponse(
                     sem_holding_stream(),

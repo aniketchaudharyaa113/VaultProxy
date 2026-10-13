@@ -1,3 +1,6 @@
+import os
+import sys
+
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -6,7 +9,7 @@ class Settings(BaseSettings):
     UPSTREAM_BASE_URL: str = "http://localhost:8001"
     UPSTREAM_API_KEY: str = ""
 
-    GEMMA_BACKEND: str = "auto"
+    GEMMA_BACKEND: str = "off"
     OLLAMA_URL: str = "http://localhost:11434"
     GEMMA_MODEL: str = "gemma4:e2b"
     GEMMA_AUTODISCOVER: bool = False
@@ -61,11 +64,12 @@ class Settings(BaseSettings):
     @field_validator("GEMMA_BACKEND")
     @classmethod
     def validate_gemma_backend(cls, v: str) -> str:
-        valid_backends = {"off", "ollama", "gemini", "auto"}
+        valid_backends = {"off", "ollama", "gemini"}
         v_lower = v.lower()
         if v_lower not in valid_backends:
+            allowed = ", ".join(sorted(valid_backends))
             raise ValueError(
-                f"Invalid GEMMA_BACKEND '{v}'. Must be one of {valid_backends}"
+                f"Invalid GEMMA_BACKEND '{v}'. Allowed values are: {allowed}."
             )
         return v_lower
 
@@ -89,4 +93,14 @@ class Settings(BaseSettings):
         return self
 
 
-settings = Settings()
+try:
+    settings = Settings()
+except Exception as exc:
+    err_str = str(exc)
+    if "GEMMA_BACKEND" in err_str:
+        backend_val = os.getenv("GEMMA_BACKEND", "")
+        sys.stderr.write(
+            f"Configuration error: Invalid GEMMA_BACKEND '{backend_val}'. Allowed values are: off, ollama, gemini.\n"
+        )
+        sys.exit(1)
+    raise

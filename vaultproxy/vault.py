@@ -9,6 +9,10 @@ class RequestVault:
         self.token_to_value: dict[str, str] = {}
         self.type_counts: dict[str, int] = {}
 
+    @property
+    def has_tokens(self) -> bool:
+        return len(self.value_to_token) > 0
+
     def get_or_create_token(self, value: str, entity_type: str) -> str:
         if value in self.value_to_token:
             return self.value_to_token[value]

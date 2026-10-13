@@ -120,11 +120,12 @@ def test_gemma_layer_error_paths_behavior():
             with pytest.raises(GemmaLayerError, match="circuit breaker is OPEN"):
                 await run_gemma_detection("My name is Ramesh")
 
-        # Circuit breaker open in non-STRICT auto mode
-        with patch.object(settings, "GEMMA_BACKEND", "auto"), patch.object(settings, "STRICT_MODE", False):
+        # Circuit breaker open in non-STRICT mode
+        with patch.object(settings, "GEMMA_BACKEND", "ollama"), patch.object(settings, "STRICT_MODE", False):
             spans, degraded, gemma_used = await run_gemma_detection("My name is Ramesh")
             assert degraded is True
             assert gemma_used is False
+            assert spans == []
 
         # Reset circuit breaker
         circuit_breaker.record_success()
@@ -137,12 +138,13 @@ def test_gemma_layer_error_paths_behavior():
 
         circuit_breaker.record_success()
 
-        # Queue timeout in non-STRICT auto mode
-        with patch.object(settings, "GEMMA_BACKEND", "auto"), patch.object(settings, "STRICT_MODE", False):
+        # Queue timeout in non-STRICT mode
+        with patch.object(settings, "GEMMA_BACKEND", "ollama"), patch.object(settings, "STRICT_MODE", False):
             with patch("asyncio.wait_for", side_effect=TimeoutError()):
                 spans, degraded, gemma_used = await run_gemma_detection("My name is Ramesh")
                 assert degraded is True
                 assert gemma_used is False
+                assert spans == []
 
         circuit_breaker.record_success()
 

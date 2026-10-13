@@ -20,7 +20,6 @@ import pytest
 from vaultproxy.config import settings
 from vaultproxy.gemma_layer import (
     GemmaLayerError,
-    _heuristic_gemma_fallback,
     parse_gemma_json,
     run_gemma_detection,
 )
@@ -161,23 +160,17 @@ def test_gemma_text_not_found_hallucination_discarded():
 
 
 def test_gemma_fallback_path_honest_behaviour():
-    """Applied H2 & H6:
-    _heuristic_gemma_fallback labels spans with source="heuristic", degraded=True, gemma_used=False.
+    """B14 honesty fix:
+    When Ollama fails, no heuristic fallback is invoked; returns empty spans, degraded=True, gemma_used=False.
     """
     async def _run():
         text = "Rajesh Sharma lives at Flat 402, Green Glen Layout, Bellandur, Bengaluru."
-        spans = _heuristic_gemma_fallback(text)
-
-        assert len(spans) >= 1
-        assert spans[0].source == "heuristic"
-
-        with patch.object(settings, "GEMMA_BACKEND", "auto"):
+        with patch.object(settings, "GEMMA_BACKEND", "ollama"):
             with patch.object(settings, "STRICT_MODE", False):
                 with patch("httpx.AsyncClient.get", side_effect=httpx.ConnectError("Ollama down")):
                     with patch("httpx.AsyncClient.post", side_effect=httpx.ConnectError("Ollama down")):
                         res_spans, degraded, gemma_used = await run_gemma_detection(text)
                         assert degraded is True
                         assert gemma_used is False
-                        assert len(res_spans) >= 1
-                        assert res_spans[0].source == "heuristic"
+                        assert res_spans == []
     asyncio.run(_run())

@@ -188,55 +188,6 @@ def parse_gemma_json(
     return spans, True
 
 
-def _heuristic_gemma_fallback(text: str) -> list[Span]:
-    """Smart fallback extractor for PERSON & ADDRESS when Ollama/Gemini is offline.
-
-    H2: Labels spans source="heuristic".
-    Disabled in production profile.
-    """
-    if settings.VAULT_PROFILE.lower() == "production":
-        return []
-
-    spans: list[Span] = []
-
-    person_patterns = [
-        r"\b(?:Rajesh Sharma|Vikram|Ramesh Kumar|Aarav|Priya Patel|Aniket Chaudhary)\b",
-        r"(?<=my name is )\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b",
-        r"(?<=Name is )\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b",
-    ]
-
-    for pat in person_patterns:
-        for m in re.finditer(pat, text, re.IGNORECASE):
-            spans.append(
-                Span(
-                    start=m.start(),
-                    end=m.end(),
-                    type="PERSON",
-                    source="heuristic",
-                    score=0.85,
-                )
-            )
-
-    addr_patterns = [
-        r"\bFlat\s+\d+[^,.]*,\s*[^,.]*,\s*[^,.]*,\s*[A-Z][a-zA-Z\s]+\b",
-        r"\bresiding at\s+([^,.]+(?:,\s*[^,.]+){1,3})\b",
-    ]
-
-    for pat in addr_patterns:
-        for m in re.finditer(pat, text, re.IGNORECASE):
-            spans.append(
-                Span(
-                    start=m.start(),
-                    end=m.end(),
-                    type="ADDRESS",
-                    source="heuristic",
-                    score=0.85,
-                )
-            )
-
-    return spans
-
-
 async def run_gemma_detection(text: str) -> tuple[list[Span], bool, bool]:
     """Run Gemma model detection on text with queue timeout, circuit breaker and concurrency controls.
 
@@ -255,9 +206,6 @@ async def run_gemma_detection(text: str) -> tuple[list[Span], bool, bool]:
             raise GemmaLayerError(
                 "VaultProxy fail-closed: Gemma layer circuit breaker is OPEN."
             )
-        if backend == "auto":
-            fb_spans = _heuristic_gemma_fallback(text)
-            return fb_spans, True, False
         return [], True, False
 
     sem = get_semaphore()
@@ -276,9 +224,6 @@ async def run_gemma_detection(text: str) -> tuple[list[Span], bool, bool]:
             raise GemmaLayerError(
                 "VaultProxy fail-closed: Gemma queue timeout waiting for concurrency slot."
             ) from te
-        if backend == "auto":
-            fb_spans = _heuristic_gemma_fallback(text)
-            return fb_spans, True, False
         return [], True, False
 
     prompt = GEMMA_PROMPT_TEMPLATE.format(text=text)
@@ -286,7 +231,7 @@ async def run_gemma_detection(text: str) -> tuple[list[Span], bool, bool]:
 
     try:
         async with httpx.AsyncClient(timeout=settings.GEMMA_TIMEOUT_SECONDS) as client:
-            if backend in ("ollama", "auto"):
+            if backend == "ollama":
                 url = f"{settings.OLLAMA_URL.rstrip('/')}/api/chat"
                 model_to_use = settings.GEMMA_MODEL
 
@@ -390,10 +335,6 @@ async def run_gemma_detection(text: str) -> tuple[list[Span], bool, bool]:
             raise GemmaLayerError(f"Gemma layer failed in STRICT_MODE: {err_msg}") from e
 
 
-
-        if backend == "auto":
-            fb_spans = _heuristic_gemma_fallback(text)
-            return fb_spans, True, False
 
         return [], True, False
     finally:

@@ -34,7 +34,7 @@ async def demo_status() -> dict[str, Any]:
     reachable = False
     model_name = settings.GEMMA_MODEL
 
-    if backend in ("ollama", "auto"):
+    if backend == "ollama":
         try:
             async with httpx.AsyncClient(timeout=2.0) as client:
                 resp = await client.get(f"{settings.OLLAMA_URL.rstrip('/')}/api/tags")
@@ -48,7 +48,7 @@ async def demo_status() -> dict[str, Any]:
                         ):
                             model_name = model_names[0]
         except Exception:
-            reachable = backend == "auto"
+            reachable = False
     elif backend == "gemini":
         reachable = bool(settings.GEMINI_API_KEY)
     else:

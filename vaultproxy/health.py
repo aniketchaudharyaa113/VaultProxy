@@ -62,9 +62,20 @@ async def favicon() -> Response:
 
 
 @router.get("/demo/last")
-async def demo_last() -> dict[str, Any]:
+async def demo_last(request: Request) -> dict[str, Any]:
     if not settings.DEMO_MODE:
         raise HTTPException(status_code=404, detail="Demo mode disabled.")
+    if settings.VAULT_AUTH_TOKEN and not is_authenticated_request(request):
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "error": {
+                    "message": "Invalid API key provided.",
+                    "type": "invalid_request_error",
+                    "code": "invalid_api_key",
+                }
+            },
+        )
     return LAST_MASKED_REQUEST
 
 

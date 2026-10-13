@@ -4,7 +4,10 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from openai import OpenAI
+try:
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None  # type: ignore
 
 from vaultproxy.config import settings
 from vaultproxy.detectors import Span
@@ -371,6 +374,9 @@ def test_openai_sdk_full_contract_suite(client):
                         headers=fastapi_resp.headers,
                         content=fastapi_resp.content,
                     )
+
+    if OpenAI is None:
+        pytest.skip("openai package not installed")
 
     oai_client = OpenAI(api_key="test-key", base_url="http://test/v1", http_client=httpx.Client(transport=LocalTransport()))
 

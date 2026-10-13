@@ -278,14 +278,14 @@ def test_e2e_non_strict_degraded_path(client):
 
 
 def test_e2e_invalid_json_body(client):
-    """Test invalid non-JSON body triggers 503 fail-closed."""
+    """Updated in Phase 1b (B7): invalid non-JSON body triggers 400 (not 503 retry loop)."""
     response = client.post(
         "/v1/chat/completions",
         content="Invalid raw string",
         headers={"content-type": "application/json"},
     )
-    assert response.status_code == 503
-    assert "VaultProxy fail-closed" in response.json()["detail"]
+    assert response.status_code == 400
+    assert "error" in response.json()
 
 
 def test_e2e_missing_messages_field(client):

@@ -2,6 +2,40 @@
 
 All notable changes to VaultProxy will be documented in this file.
 
+## [0.2.1] - 2026-10-13
+
+### Fixed & Hardened (Phase 1a & 1b Blockers)
+- **B1 (Gzip Compression)**: Client correctly receives and decodes gzip-compressed upstream responses with sensitive tokens restored.
+- **B2 (Stream Lifecycle & Client Isolation)**: Completed SSE streams no longer close the shared proxy HTTP client, ensuring concurrent in-flight streams are uninterrupted.
+- **B3 (Base URL Routing)**: Upstream routing supports bare host (`http://host:port`), `/v1` suffix, and custom prefixes.
+- **B4 (Stream Concurrency Accounting)**: Concurrency slot held across the full lifecycle of SSE response streaming before release, enforcing `MAX_CONCURRENT_REQUESTS`.
+- **B5 (Dev Token Enforcement)**: Bearer authentication enforced in development profile whenever `VAULT_AUTH_TOKEN` is configured.
+- **B6 (Non-Text Part Filtering)**: Distinguishes metadata/property keys named `'file'` from true binary parts, eliminating false-positive 400 rejections in production.
+- **B7 (Error Format & Request ID)**: Client errors return standard OpenAI-compatible error objects with an `x-request-id` HTTP header.
+- **B8 (Conditional System Instruction)**: Placeholder preservation instruction (`Keep all token placeholders...`) is injected only when vault contains masked tokens; merged into existing system messages without changing message count.
+- **B9 (Integer Leaves & Dictionary Keys)**: Full-match PII scanning extended to integer values and dictionary keys inside messages and tool calls; top-level request parameters and `logit_bias` preserved.
+- **B10 (Greedy Priority Span Merging)**: Overlapping entity spans merged using greedy interval priority scheduling without dropping valid non-overlapping spans.
+- **B11 (Request Memory Hygiene)**: Retained request payload inspection disabled in production profile (`DEMO_MODE=false`).
+- **B12 (Secret Scrubbing)**: Gemini API key removed from all logged URLs and debug logging.
+- **B14 (Honesty Fix)**: Removed `_heuristic_gemma_fallback` and all hardcoded person names. Default `GEMMA_BACKEND` set to `"off"`.
+
+### Corrections
+- Removed `_heuristic_gemma_fallback` and hardcoded person names (`Rajesh Sharma`, `Vikram`, `Ramesh Kumar`, `Aarav`, `Priya Patel`, `Aniket Chaudhary`).
+- Removed `"auto"` backend option. `GEMMA_BACKEND` accepts only `off`, `ollama`, or `gemini`, defaulting to `"off"`.
+- Configured unknown backend values to print a readable configuration error listing allowed values without Python tracebacks.
+- Startup log now explicitly announces `"Protection: rules only"` or `"Protection: rules + <model>"`.
+- Tests updated because they froze old heuristic/auto behaviour:
+  - `tests/test_phase5_security.py::test_heuristic_fallback_disabled_in_production`
+  - `tests/test_gemma_characterization.py::test_gemma_fallback_path_honest_behaviour`
+  - `tests/test_merge_and_layer_correctness.py`
+
+### Known Issues
+- `/readyz` endpoint can report `"ready"` when the configured SLM backend is offline (B13, scheduled for Phase 1c).
+- Misconfigured production startup exits with a Python traceback rather than a clean message (B15, scheduled for Phase 1c).
+- Detector coverage gaps: lowercase PAN, spaced PAN, dotted Aadhaar, unlisted UPI handles, and non-prefixed secret formats.
+- Azure OpenAI and native Anthropic `/v1/messages` endpoints are unsupported.
+- Untested third-party LLM providers and client libraries beyond OpenAI Python and curl.
+
 ## [0.2.0] - 2026-10-10
 
 ### Added & Improved
