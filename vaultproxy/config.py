@@ -97,10 +97,21 @@ try:
     settings = Settings()
 except Exception as exc:
     err_str = str(exc)
-    if "GEMMA_BACKEND" in err_str:
+    if "Invalid GEMMA_BACKEND" in err_str:
         backend_val = os.getenv("GEMMA_BACKEND", "")
         sys.stderr.write(
             f"Configuration error: Invalid GEMMA_BACKEND '{backend_val}'. Allowed values are: off, ollama, gemini.\n"
         )
         sys.exit(1)
-    raise
+    if "VAULT_AUTH_TOKEN" in err_str:
+        sys.stderr.write(
+            "Configuration error: VAULT_AUTH_TOKEN is required in production profile and must be at least 24 characters long.\n"
+        )
+        sys.exit(1)
+    if "DEMO_MODE=true is refused" in err_str:
+        sys.stderr.write(
+            "Configuration error: DEMO_MODE=true is refused when VAULT_PROFILE=production.\n"
+        )
+        sys.exit(1)
+    sys.stderr.write(f"Configuration error: {err_str}\n")
+    sys.exit(1)

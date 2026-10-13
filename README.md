@@ -116,13 +116,19 @@ cd october
 ### Step 2: Create a Virtual Environment and Install
 ```bash
 python3 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate  # Fish: source .venv/bin/activate.fish | Windows: .venv\Scripts\Activate.ps1
 pip install .
+
+# Or install test dependencies needed to run "pytest -q":
+pip install ".[dev]"
 ```
 
 ### Step 3: Run
 
 #### Path (a): Try with Bundled Mock Upstream (Zero API Keys Needed)
+
+> [!WARNING]
+> `/demo/*` exposes masked request bodies and must never be enabled outside a local trial.
 
 Terminal 1 — Run mock upstream server:
 ```bash
@@ -294,13 +300,24 @@ Generated from `vaultproxy.config.Settings`:
 
 | Entity Type | Exact Matching Rule & Verification Logic |
 | :--- | :--- |
-| `AADHAAR` | 12-digit Indian Aadhaar number with optional spaces/hyphens (`\b[2-9]\d{3}[-\s]?\d{4}[-\s]?\d{4}\b`). Verified with the Verhoeff checksum algorithm. |
-| `PAN` | 10-character Permanent Account Number (`\b[A-Z]{5}[0-9]{4}[A-Z]{1}\b`). Fourth character validated for entity type (`P`, `C`, `H`, `F`, `A`, `T`, `B`, `L`, `J`, `G`). |
-| `MOBILE` | 10-digit Indian mobile number with optional prefix (`\b(?:(?:\+91|0)[-.\s]*)?[6-9]\d{9}\b`). |
-| `EMAIL` | RFC 5322 email address format (`\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b`). |
-| `IFSC` | 11-character Indian Financial System Code (`\b[A-Z]{4}0[A-Z0-9]{6}\b`). |
-| `UPI_ID` | Virtual Payment Address (`\b[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}\b`) validated against known bank PSP suffixes (`@okhdfcbank`, `@oksbi`, `@paytm`, `@ybl`, etc.). |
-| `SECRET` | API keys, private keys, database connection strings, and tokens: AWS credentials, OpenAI keys, Slack tokens, Stripe keys, RSA/EC private keys (`BEGIN ... PRIVATE KEY`), database URIs (`postgres://`, etc.). |
+| `AADHAAR` | 12-digit Indian Aadhaar number with optional spaces or hyphens, verified with the Verhoeff checksum algorithm. |
+| `PAN` | 10-character Permanent Account Number. Fourth character validated for taxpayer entity type (`P`, `C`, `H`, `F`, `A`, `T`, `B`, `L`, `J`, `G`). |
+| `MOBILE` | 10-digit Indian mobile number with optional prefix (`+91` or `0`). |
+| `EMAIL` | A simple email pattern (`local-part@domain.tld`). |
+| `IFSC` | 11-character Indian Financial System Code. |
+| `UPI_ID` | Virtual Payment Address (`username@handle`) validated against 8 supported handles: `okaxis`, `oksbi`, `okhdfcbank`, `okicici`, `ybl`, `paytm`, `ibl`, `axl`. Other handles are not detected. |
+| `SECRET` | AWS access key IDs (`AKIA...`), GitHub personal access tokens (`ghp_...`), GitHub fine-grained PATs (`github_pat_...`), and JSON Web Tokens (`JWT` / `eyJ...`). |
+
+```text
+Detector Pattern Details:
+AADHAAR:  \b[2-9]\d{3}[-\s]?\d{4}[-\s]?\d{4}\b (Verhoeff checksum validated)
+PAN:      \b[A-Z]{5}[0-9]{4}[A-Z]{1}\b (4th character: P, C, H, F, A, T, B, L, J, G)
+MOBILE:   \b(?:(?:\+91|0)[-.\s]*)?[6-9]\d{9}\b
+EMAIL:    \b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b
+IFSC:     \b[A-Z]{4}0[A-Z0-9]{6}\b
+UPI_ID:   \b[a-zA-Z0-9._-]+@(okaxis|oksbi|okhdfcbank|okicici|ybl|paytm|ibl|axl)\b
+SECRET:   AKIA access keys, ghp_ tokens, github_pat_ tokens, and JWT strings
+```
 
 ### Known Misses (from `python scripts/vp_review_check.py . --detectors`)
 
@@ -329,16 +346,28 @@ MISSED GSTIN                  []
 
 ### The SLM Layer
 - **Status & Requirement**: Optional, requires a local Ollama instance with a model pulled (e.g. `gemma4:e2b`) or a Google Gemini API key. Defaults to `off`.
-- **Input Limit**: Exactly 24,000 characters total across 4 overlapping chunks (each chunk is 6,000 characters with 300 character overlap).
-- **Beyond Limit**: In `STRICT_MODE=true`, requests exceeding 24,000 characters fail-closed with HTTP 503. In non-strict mode (`STRICT_MODE=false`), the request marks `degraded=true` in `X-Vault-Report` and processes rules-only for the excess text.
+- **Input Limit**: 4 chunks of 6,000 characters with 300 characters of overlap (about 23,100 unique characters).
+- **Beyond Limit**: In `STRICT_MODE=true`, requests exceeding 4 chunks fail-closed with HTTP 503. In non-strict mode (`STRICT_MODE=false`), the request marks `degraded=true` in `X-Vault-Report` and processes rules-only for the excess text.
 - **Behavior on Failure**:
   - `STRICT_MODE=true`: Fails closed with HTTP 503 if the backend is unreachable, times out, or trips the circuit breaker.
   - `STRICT_MODE=false`: Falls back to rule-only detection with empty SLM spans, returning `degraded=true` and `gemma_used=false`.
 - **Prompt Injection Vulnerability**: Prompt injection in user text can trick the SLM model into omitting entity spans or hallucinating, reducing its recall. Deterministic regex rules run independently and are not affected by prompt injection.
 - **Measured Latency**:
-  - Hardware: AMD Ryzen 7 7435HS (16 vCPUs, x86_64).
-  - Rules-only proxy: Concurrency 1 p50 = 11.2ms, p95 = 14.5ms; Concurrency 5 p50 = 18.7ms, p95 = 29.8ms.
-  - Local SLM (Ollama CPU): ~500ms to 2000ms per chunk, bounded by `GEMMA_CONCURRENCY_LIMIT=4` and queue timeout `2.0s`.
+  - Command: `python scripts/load_check.py --requests 200 --levels 1 5 10 20`
+  - Date: October 13, 2026
+  - Hardware: AMD Ryzen 7 7435HS (16 vCPUs, x86_64, Linux 6.18)
+  - Rules-only proxy:
+    ```text
+    Running load check against http://127.0.0.1:8000/v1/chat/completions
+    Requests per level: 200
+    Concurrency  | Total  | 200   | 429   | 503   | p50 (ms)  | p95 (ms) 
+    ----------------------------------------------------------------------
+    1            | 200    | 200   | 0     | 0     | 4.87      | 6.77     
+    5            | 200    | 200   | 0     | 0     | 14.90     | 19.69    
+    10           | 200    | 200   | 0     | 0     | 30.49     | 40.68    
+    20           | 200    | 200   | 0     | 0     | 62.05     | 126.25   
+    ```
+  - Local SLM: Not yet measured with a real model.
 
 ---
 
@@ -365,8 +394,7 @@ MISSED GSTIN                  []
 ## 10. Known Issues in This Release
 
 The following issues are known in release 0.2.1 and documented honestly:
-- `/readyz` can say `"ready"` when the configured SLM backend is unreachable (tracked under check B13, scheduled for Phase 1c).
-- A misconfigured production startup (such as missing `VAULT_AUTH_TOKEN`) prints a Python traceback rather than a single-line message (tracked under check B15, scheduled for Phase 1c).
+- `/readyz` can say `"ready"` when the configured SLM backend is unreachable (tracked under check B13, scheduled for next release).
 - Detector coverage gaps listed in the detector probes section above (lowercase PAN, dotted Aadhaar, arbitrary UPI handles).
 - Azure OpenAI and native Anthropic `/v1/messages` APIs are not supported due to different path structures and auth headers.
 - Untested LLM providers and client libraries beyond OpenAI Python and curl.
@@ -386,7 +414,7 @@ bash scripts/smoke.sh
 # 3. Run automated production security check
 bash scripts/verify_production.sh
 
-# 4. Run compliance and bug checks (B1 to B15)
+# 4. Run regression checks (B1 to B15)
 python scripts/vp_review_check.py .
 ```
 
@@ -394,7 +422,7 @@ python scripts/vp_review_check.py .
 - `pytest`: Tests core logic, token parsing, streaming restore, and configuration validation.
 - `scripts/smoke.sh`: Proves the end-to-end proxy loop with mock upstream: validates prompt masking, header injection, and client response restoration.
 - `scripts/verify_production.sh`: Proves production security constraints: token enforcement, body size limits, demo route blocking, and unauthenticated readiness hygiene.
-- `scripts/vp_review_check.py`: Proves compliance with blocker requirements B1–B12 and B14.
+- `scripts/vp_review_check.py`: Independent regression checks for B1–B12, B14, and B15.
 
 ### Benchmark Results (Rules Only)
 
@@ -419,7 +447,7 @@ Evaluated with `bench/run.py`:
 
 ## 12. Roadmap
 
-- **Phase 1c Fixes**: Clean exit on invalid production config without traceback (B15); health check reflecting actual SLM reachability on `/readyz` (B13).
+- **Next Release Fixes**: Health check reflecting actual SLM reachability on `/readyz` (B13).
 - **CLI & Diagnostics**: Standalone `vaultproxy doctor` command to check upstream connectivity and local Ollama setup.
 - **Packaging**: Container images (Docker / Compose) and PyPI release.
 - **Detector Expansion**: Additional Indian entity detectors (GSTIN, Driving Licence, Voter ID, lower-case PAN, dotted formatting).
