@@ -99,6 +99,72 @@ def reset_semaphore() -> None:
 LAST_SLM_MODEL_NAME: str = ""
 LAST_SLM_LATENCY_MS: float = 0.0
 
+_last_probe_time: float = 0.0
+_last_probe_ok: bool = False
+_last_probe_model: str | None = None
+
+
+async def check_slm_readiness() -> tuple[bool, str | None]:
+    """Probe the SLM backend and model presence, cached at most 10 seconds.
+
+    Returns:
+        (is_ready, verified_model_name)
+    """
+    global _last_probe_time, _last_probe_ok, _last_probe_model, LAST_SLM_MODEL_NAME
+
+    backend = settings.GEMMA_BACKEND.lower()
+    if backend == "off":
+        return True, "off"
+
+    if circuit_breaker.state == "OPEN":
+        return False, None
+
+    now = time.monotonic()
+    if _last_probe_time > 0 and (now - _last_probe_time) < 10.0:
+        return _last_probe_ok, _last_probe_model
+
+    _last_probe_time = now
+
+    if backend == "ollama":
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                resp = await client.get(f"{settings.OLLAMA_URL.rstrip('/')}/api/tags")
+                if resp.status_code == 200:
+                    models = resp.json().get("models", [])
+                    model_names = [m.get("name", "") for m in models]
+                    model_present = any(
+                        settings.GEMMA_MODEL in name for name in model_names
+                    )
+                    if model_present:
+                        _last_probe_ok = True
+                        _last_probe_model = settings.GEMMA_MODEL
+                        LAST_SLM_MODEL_NAME = settings.GEMMA_MODEL
+                        return True, _last_probe_model
+                    elif settings.GEMMA_AUTODISCOVER and model_names:
+                        _last_probe_ok = True
+                        _last_probe_model = model_names[0]
+                        LAST_SLM_MODEL_NAME = model_names[0]
+                        return True, _last_probe_model
+        except Exception:
+            pass
+        _last_probe_ok = False
+        _last_probe_model = None
+        return False, None
+
+    elif backend == "gemini":
+        if not settings.GEMINI_API_KEY:
+            _last_probe_ok = False
+            _last_probe_model = None
+            return False, None
+        _last_probe_ok = True
+        _last_probe_model = settings.GEMMA_MODEL
+        LAST_SLM_MODEL_NAME = settings.GEMMA_MODEL
+        return True, _last_probe_model
+
+    _last_probe_ok = False
+    _last_probe_model = None
+    return False, None
+
 
 def get_source_label(model_name: str) -> str:
     """Return 'gemma' if model starts with 'gemma', otherwise 'slm:<model_name>'."""

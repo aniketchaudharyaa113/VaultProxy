@@ -35,20 +35,27 @@ async def health() -> dict[str, str]:
 async def readyz(request: Request) -> dict[str, Any]:
     from vaultproxy.gemma_layer import (
         LAST_SLM_LATENCY_MS,
-        LAST_SLM_MODEL_NAME,
+        check_slm_readiness,
         circuit_breaker,
     )
 
-    status_val = "ready" if circuit_breaker.state != "OPEN" else "degraded"
-    if settings.VAULT_AUTH_TOKEN:
+    slm_ok, verified_model = await check_slm_readiness()
+
+    if circuit_breaker.state == "OPEN" or not slm_ok:
+        status_val = "not_ready" if settings.STRICT_MODE else "degraded"
+        model_name = None
+    else:
+        status_val = "ready"
+        model_name = verified_model if verified_model != "off" else None
+
+    if settings.VAULT_PROFILE == "production" or settings.VAULT_AUTH_TOKEN:
         if not is_authenticated_request(request):
             return {"status": status_val}
-
 
     return {
         "status": status_val,
         "slm_backend": settings.GEMMA_BACKEND,
-        "slm_model": LAST_SLM_MODEL_NAME or settings.GEMMA_MODEL,
+        "slm_model": model_name,
         "slm_latency_ms": LAST_SLM_LATENCY_MS,
         "circuit_breaker": circuit_breaker.state,
         "strict_mode": settings.STRICT_MODE,

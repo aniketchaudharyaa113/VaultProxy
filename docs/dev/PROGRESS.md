@@ -14,7 +14,7 @@
 | Phase 5.3 | 2026-10-11 | 0fed54e | 150 | 86% | +242 | None (0 new settings) | None |
 | Phase 1a | 2026-10-12 | b48bf28 | 167 | 86% | +84 | None (0 new settings) | B6-B10 pending in Phase 1b |
 | Phase 1b | 2026-10-13 | 1c2fb44 | 211 | 86% | +241 | None (0 new settings) | None (B6-B10 resolved; B13-B18 pending in Phase 1c) |
-| Phase 1c (pending) | - | - | - | - | - | - | SLM honesty, startup UX, test fragility, docs vs code (B13-B18) |
+| Phase 1c | 2026-10-13 | b7dbce4 | 227 | 84% | +115 | None (0 new settings) | B13 resolved (/readyz honest probe & caching); B16-B18 pending |
 | Phase 2 (pending) | - | - | - | - | - | - | Developer-ready run and deploy (split server, CLI, doctor, docker, compose) |
 | Phase 3 (pending) | - | - | - | - | - | - | Detection quality (verified formats, allow/deny lists, probe suite) |
 | Phase 4 (pending) | - | - | - | - | - | - | Latency optimizations (HMAC span cache, bounded parallel SLM) |
