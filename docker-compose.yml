@@ -1,0 +1,42 @@
+version: "3.8"
+
+services:
+  vaultproxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vaultproxy
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      - VAULT_PROFILE=${VAULT_PROFILE:-development}
+      - VAULT_AUTH_TOKEN=${VAULT_AUTH_TOKEN:-}
+      - UPSTREAM_BASE_URL=${UPSTREAM_BASE_URL:-https://api.openai.com/v1}
+      - UPSTREAM_API_KEY=${UPSTREAM_API_KEY:-}
+      - GEMMA_BACKEND=${GEMMA_BACKEND:-off}
+      - OLLAMA_URL=http://ollama:11434
+      - GEMMA_MODEL=${GEMMA_MODEL:-gemma2:2b}
+      - STRICT_MODE=${STRICT_MODE:-false}
+      - DEMO_MODE=${DEMO_MODE:-false}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # Optional local SLM service for offline contextual NER
+  ollama:
+    image: ollama/ollama:latest
+    container_name: vaultproxy-ollama
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    profiles:
+      - slm
+
+volumes:
+  ollama_data:

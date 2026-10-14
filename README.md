@@ -103,29 +103,63 @@ Restores sensitive entities in real time on streaming and non-streaming model re
 
 ---
 
-## 3. Quickstart from Source
+## 3. Quickstart & Developer Guide
 
-*Note: VaultProxy is not on PyPI yet, there is no Docker image yet, and there is no standalone CLI binary yet. Run from source using python.*
+VaultProxy can be installed locally from source or launched via Docker.
 
-### Step 1: Clone Repository
+### 3-Step Setup
+
+#### Step 1: Install
+Clone the repository and install the package with CLI tools:
 ```bash
 git clone https://github.com/aniketchaudharyaa113/vaultproxy.git
 cd vaultproxy
-```
-
-### Step 2: Create a Virtual Environment and Install
-```bash
 python3 -m venv .venv
-source .venv/bin/activate  # Fish: source .venv/bin/activate.fish | Windows: .venv\Scripts\Activate.ps1
-pip install .
-
-# Or install test dependencies needed to run "pytest -q":
-pip install ".[dev]"
+source .venv/bin/activate  # Windows: .venv\Scripts\Activate.ps1
+pip install -e ".[dev]"
 ```
 
-### Step 3: Run
+#### Step 2: Initialize Configuration
+Run `vaultproxy init` to generate a `.env` file with a secure, 32-byte URL-safe authentication token:
+```bash
+vaultproxy init
+```
+*(Or copy the template manually: `cp .env.example .env`)*
 
-#### Path (a): Try with Bundled Mock Upstream (Zero API Keys Needed)
+#### Step 3: Verify and Run
+
+**1. Dry-run detection locally (no server or upstream needed):**
+```bash
+vaultproxy check "My PAN is ABCPB1234F and Aadhaar is 367598341203"
+```
+
+**2. Check system health and diagnostics:**
+```bash
+vaultproxy doctor
+```
+
+**3. Start the proxy:**
+```bash
+# Point directly to your upstream LLM provider:
+vaultproxy run --upstream https://api.openai.com/v1
+
+# Or with Docker Compose:
+docker compose up -d
+```
+
+### CLI Command Reference
+
+The `vaultproxy` command-line interface provides zero-dependency developer tools:
+
+| Command | Usage | Description |
+| :--- | :--- | :--- |
+| `run` | `vaultproxy run [--host 127.0.0.1] [--port 8000] [--upstream URL] [--strict] [--workers 1]` | Starts the proxy server |
+| `init` | `vaultproxy init` | Generates a `.env` with a secure random token (never overwrites) |
+| `doctor` | `vaultproxy doctor [--port 8000]` | Diagnostics for Python version, port, upstream, auth token, and SLM |
+| `check` | `vaultproxy check "<text>" [--file <path>]` | Dry-run entity detection without upstream calls |
+| `version` | `vaultproxy version` | Prints package version |
+
+### Testing Locally with the Bundled Mock Upstream
 
 > [!WARNING]
 > `/demo/*` exposes masked request bodies and must never be enabled outside a local trial.
@@ -137,7 +171,7 @@ python3 -m uvicorn demo.mock_upstream:app --port 8001
 
 Terminal 2 — Run VaultProxy pointing to the mock upstream:
 ```bash
-UPSTREAM_BASE_URL="http://localhost:8001" DEMO_MODE=true GEMMA_BACKEND=off python3 -m uvicorn vaultproxy.server:app --port 8000
+UPSTREAM_BASE_URL="http://localhost:8001" DEMO_MODE=true GEMMA_BACKEND=off vaultproxy run --port 8000
 ```
 
 Terminal 3 — Send a test prompt with curl:
@@ -155,15 +189,6 @@ Verify what the upstream received by checking `/demo/last`:
 curl http://127.0.0.1:8000/demo/last
 ```
 The upstream receives tokens like `[PAN_1]` and `[AADHAAR_1]`, while the client response contains the restored values `ABCPB1234F` and `367598341203`.
-
-#### Path (b): Connect to a Real OpenAI-Compatible API
-
-```bash
-export UPSTREAM_BASE_URL="https://api.openai.com/v1"
-export UPSTREAM_API_KEY="your-openai-api-key"
-export GEMMA_BACKEND="off"
-python3 -m uvicorn vaultproxy.server:app --port 8000
-```
 
 ---
 
