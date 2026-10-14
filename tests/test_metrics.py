@@ -98,11 +98,20 @@ def test_metrics_import_coverage():
     import sys
     from importlib import reload
 
+    # 1. Test when prometheus_client is not installed (ImportError branch)
+    with patch.dict(sys.modules, {"prometheus_client": None}):
+        reload(metrics_mod)
+        assert metrics_mod.METRICS_AVAILABLE is False
+        assert metrics_mod.generate_latest() == b""
+        metrics_mod.record_request_metrics(0.1, 1, False, "CLOSED")
+
+    # 2. Test when prometheus_client is installed
     mock_prom = MagicMock()
     with patch.dict(sys.modules, {"prometheus_client": mock_prom}):
         reload(metrics_mod)
         assert metrics_mod.METRICS_AVAILABLE is True
         metrics_mod.record_request_metrics(0.1, 1, False, "CLOSED")
 
-    # Reload again to restore default state
+    # Restore default module state
     reload(metrics_mod)
+

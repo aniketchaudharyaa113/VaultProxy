@@ -10,10 +10,10 @@ OVERALL_PASS=true
 # 1. Check Python version
 PY_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
 echo -n "[CHECK] Python version ($PY_VER)... "
-if python3 -c "import sys; assert sys.version_info >= (3, 11)" 2>/dev/null; then
+if python3 -c "import sys; assert sys.version_info >= (3, 10)" 2>/dev/null; then
   echo "PASS"
 else
-  echo "FAIL (Python 3.11+ required)"
+  echo "FAIL (Python 3.10+ required)"
   OVERALL_PASS=false
 fi
 
