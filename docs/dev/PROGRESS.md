@@ -15,7 +15,7 @@
 | Phase 1a | 2026-10-12 | b48bf28 | 167 | 86% | +84 | None (0 new settings) | B6-B10 pending in Phase 1b |
 | Phase 1b | 2026-10-13 | 1c2fb44 | 211 | 86% | +241 | None (0 new settings) | None (B6-B10 resolved; B13-B18 pending in Phase 1c) |
 | Phase 1c | 2026-10-14 | ef29f07 | 227 | 84% | +130 | None (0 new settings) | B13, B17, B18 resolved |
-| Phase 2 (pending) | - | - | - | - | - | - | Developer-ready run and deploy (split server, CLI, doctor, docker, compose) |
+| Phase 2 | 2026-10-14 | pending | 234 | 81% | +220 | None (0 new settings) | CLI (run, init, doctor, check, version) & lifespan migration |
 | Phase 3 (pending) | - | - | - | - | - | - | Detection quality (verified formats, allow/deny lists, probe suite) |
 | Phase 4 (pending) | - | - | - | - | - | - | Latency optimizations (HMAC span cache, bounded parallel SLM) |
 | Phase 5 (pending) | - | - | - | - | - | - | Docs and compatibility recipes (tested end to end) |

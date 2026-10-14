@@ -184,6 +184,19 @@ class MaskingEngine:
     def __init__(self, vault: RequestVault) -> None:
         self.vault = vault
 
+    def mask_text(self, text: str) -> str:
+        """Scan and mask sensitive entities in a single text string."""
+        if not text:
+            return text
+        spans = run_rule_detectors(text)
+        merged = merge_spans(spans)
+        result = text
+        for span in sorted(merged, key=lambda s: s.start, reverse=True):
+            orig_val = text[span.start:span.end]
+            token = self.vault.get_or_create_token(orig_val, span.type)
+            result = result[:span.start] + token + result[span.end:]
+        return result
+
     async def mask_payload(
         self, body_json: dict[str, Any]
     ) -> tuple[dict[str, Any], bool, bool, int]:

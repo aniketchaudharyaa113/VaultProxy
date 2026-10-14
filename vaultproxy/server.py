@@ -5,6 +5,7 @@ import os
 import time
 import uuid
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
@@ -36,8 +37,33 @@ logger = logging.getLogger("vaultproxy")
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 
+_httpx_client: httpx.AsyncClient | None = None
 
-app = FastAPI(title="VaultProxy")
+
+async def startup_event() -> None:
+    protection_str = (
+        "rules only"
+        if settings.GEMMA_BACKEND.lower() == "off"
+        else f"rules + {settings.GEMMA_MODEL}"
+    )
+    logger.info(f"Protection: {protection_str}")
+    logger.info(
+        f"VaultProxy starting up. Profile: {settings.VAULT_PROFILE}. "
+        "Maximum SLM input size: 24,000 chars (4 chunks x 6,000 chars with 300-char overlap). "
+        "Inputs exceeding limit fail-closed with 503 in STRICT_MODE, or mark degraded=true in non-STRICT mode."
+    )
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    await startup_event()
+    yield
+    global _httpx_client
+    if _httpx_client is not None and not _httpx_client.is_closed:
+        await _httpx_client.aclose()
+
+
+app = FastAPI(title="VaultProxy", lifespan=lifespan)
 app.include_router(demo_router)
 app.include_router(health_router)
 
@@ -117,7 +143,6 @@ PRODUCTION_ALLOWED_ROUTES = {
     ("GET", "/metrics"),
 }
 
-_httpx_client: httpx.AsyncClient | None = None
 _concurrency_semaphore: asyncio.Semaphore | None = None
 
 
@@ -161,28 +186,6 @@ def get_concurrency_semaphore() -> asyncio.Semaphore:
     if _concurrency_semaphore is None:
         _concurrency_semaphore = asyncio.Semaphore(settings.MAX_CONCURRENT_REQUESTS)
     return _concurrency_semaphore
-
-
-@app.on_event("startup")
-async def startup_event() -> None:
-    protection_str = (
-        "rules only"
-        if settings.GEMMA_BACKEND.lower() == "off"
-        else f"rules + {settings.GEMMA_MODEL}"
-    )
-    logger.info(f"Protection: {protection_str}")
-    logger.info(
-        f"VaultProxy starting up. Profile: {settings.VAULT_PROFILE}. "
-        "Maximum SLM input size: 24,000 chars (4 chunks x 6,000 chars with 300-char overlap). "
-        "Inputs exceeding limit fail-closed with 503 in STRICT_MODE, or mark degraded=true in non-STRICT mode."
-    )
-
-
-@app.on_event("shutdown")
-async def shutdown_event() -> None:
-    global _httpx_client
-    if _httpx_client is not None and not _httpx_client.is_closed:
-        await _httpx_client.aclose()
 
 
 @app.middleware("http")
@@ -714,9 +717,9 @@ async def chat_completions(request: Request) -> Response:
 
 
 def main() -> None:
-    import uvicorn
+    from vaultproxy.cli import main as cli_main
 
-    uvicorn.run("vaultproxy.server:app", host="127.0.0.1", port=8000)
+    cli_main()
 
 
 if __name__ == "__main__":
