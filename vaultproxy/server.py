@@ -136,8 +136,11 @@ RESPONSE_DROP_HEADERS = HOP_BY_HOP_HEADERS | {
 
 PRODUCTION_ALLOWED_ROUTES = {
     ("POST", "/v1/chat/completions"),
+    ("POST", "/chat/completions"),
     ("POST", "/v1/embeddings"),
+    ("POST", "/embeddings"),
     ("GET", "/v1/models"),
+    ("GET", "/models"),
     ("GET", "/healthz"),
     ("GET", "/readyz"),
     ("GET", "/metrics"),
@@ -317,6 +320,7 @@ async def get_metrics(request: Request) -> Response:
 
 
 @app.get("/v1/models")
+@app.get("/models")
 async def get_models(request: Request) -> Response:
     t0 = time.perf_counter()
     req_id = str(uuid.uuid4())
@@ -372,6 +376,7 @@ async def get_models(request: Request) -> Response:
 
 
 @app.post("/v1/embeddings")
+@app.post("/embeddings")
 async def embeddings(request: Request) -> Response:
     t0 = time.perf_counter()
     req_id = str(uuid.uuid4())
@@ -509,6 +514,7 @@ async def embeddings(request: Request) -> Response:
 
 
 @app.post("/v1/chat/completions")
+@app.post("/chat/completions")
 async def chat_completions(request: Request) -> Response:
     t0 = time.perf_counter()
     req_id = str(uuid.uuid4())

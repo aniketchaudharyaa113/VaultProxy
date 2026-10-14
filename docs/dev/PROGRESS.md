@@ -18,7 +18,7 @@
 | Phase 2 | 2026-10-14 | 76f6f38 | 234 | 81% | +220 | None (0 new settings) | CLI (run, init, doctor, check, version) & lifespan migration |
 | Phase 3 (pending) | - | - | - | - | - | - | Detection quality (verified formats, allow/deny lists, probe suite) |
 | Phase 4 (pending) | - | - | - | - | - | - | Latency optimizations (HMAC span cache, bounded parallel SLM) |
-| Phase 5 (pending) | - | - | - | - | - | - | Docs and compatibility recipes (tested end to end) |
+| Phase 5 | 2026-10-14 | pending | 237 | 81% | +160 | None (0 new settings) | Multi-language compatibility (Node, Spring Boot, Ruby, Go, Python) & route aliases |
 | Phase 6 (pending) | - | - | - | - | - | - | CI and release preparation (manual triggers, security scans) |
 | Phase 7 (pending) | - | - | - | - | - | - | Real-use gates report (REAL_USE_GATES.md, soak, live checks) |
 

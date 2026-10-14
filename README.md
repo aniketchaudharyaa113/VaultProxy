@@ -194,53 +194,70 @@ The upstream receives tokens like `[PAN_1]` and `[AADHAAR_1]`, while the client 
 
 ## 4. Connecting Your App
 
-### OpenAI Python SDK (Tested)
+Because VaultProxy speaks the standard OpenAI HTTP protocol, it is compatible with any language, framework, or codebase (Node.js, Java / Spring Boot, Ruby, Go, Python, etc.) by setting `base_url` to `http://127.0.0.1:8000/v1` (or `http://127.0.0.1:8000`).
+
+### Node.js / TypeScript
+```typescript
+import OpenAI from "openai";
+
+const openai = new OpenAI({
+  baseURL: "http://127.0.0.1:8000/v1",
+  apiKey: process.env.VAULT_AUTH_TOKEN || "local_dev_token",
+});
+
+const completion = await openai.chat.completions.create({
+  model: "gpt-4o",
+  messages: [{ role: "user", content: "Customer PAN is ABCPB1234F" }],
+});
+```
+
+### Java / Spring Boot (Spring AI)
+In `application.yml`:
+```yaml
+spring:
+  ai:
+    openai:
+      base-url: http://localhost:8000
+      api-key: ${VAULT_AUTH_TOKEN:local_dev_token}
+```
+
+### Ruby (`ruby-openai`)
+```ruby
+require "openai"
+
+client = OpenAI::Client.new(
+  access_token: ENV.fetch("VAULT_AUTH_TOKEN", "local_token"),
+  uri_base: "http://127.0.0.1:8000"
+)
+```
+
+### Python (OpenAI SDK)
 ```python
 from openai import OpenAI
 
 client = OpenAI(
     base_url="http://127.0.0.1:8000/v1",
-    api_key="your_vault_auth_token_or_dummy_key",
+    api_key="your_vault_auth_token",
 )
 
 response = client.chat.completions.create(
-    model="gpt-4",
+    model="gpt-4o",
     messages=[{"role": "user", "content": "My PAN is ABCPB1234F"}],
 )
-print(response.choices[0].message.content)
 ```
 
-### cURL (Tested)
+### cURL
 ```bash
 curl -X POST http://127.0.0.1:8000/v1/chat/completions \
   -H "Authorization: Bearer your_vault_auth_token" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gpt-4",
+    "model": "gpt-4o",
     "messages": [{"role": "user", "content": "My PAN is ABCPB1234F"}]
   }'
 ```
 
-### OpenAI Node.js SDK (Untested)
-```javascript
-import OpenAI from "openai";
-
-const client = new OpenAI({
-  baseURL: "http://127.0.0.1:8000/v1",
-  apiKey: "your_vault_auth_token",
-});
-```
-
-### LangChain (Untested)
-```python
-from langchain_openai import ChatOpenAI
-
-llm = ChatOpenAI(
-    base_url="http://127.0.0.1:8000/v1",
-    api_key="your_vault_auth_token",
-    model="gpt-4",
-)
-```
+*For comprehensive recipes, streaming examples, and LangChain4j / Go setups, see [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).*
 
 ---
 
