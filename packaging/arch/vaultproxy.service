@@ -1,0 +1,24 @@
+[Unit]
+Description=VaultProxy - Local-first privacy proxy for LLM applications
+Documentation=https://github.com/aniketchaudharyaa113/VaultProxy
+After=network.target
+
+[Service]
+Type=simple
+User=vaultproxy
+Group=vaultproxy
+WorkingDirectory=/var/lib/vaultproxy
+EnvironmentFile=-/etc/vaultproxy/config.env
+ExecStart=/usr/bin/vaultproxy run --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=3s
+LimitNOFILE=65536
+
+# System hardening
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,31 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        if ! getent group vaultproxy >/dev/null 2>&1; then
+            addgroup --system vaultproxy >/dev/null
+        fi
+
+        if ! getent passwd vaultproxy >/dev/null 2>&1; then
+            adduser --system --ingroup vaultproxy --home /var/lib/vaultproxy \
+                    --no-create-home --shell /usr/sbin/nologin \
+                    --gecos "VaultProxy daemon user" vaultproxy >/dev/null
+        fi
+
+        mkdir -p /var/lib/vaultproxy
+        chown -R vaultproxy:vaultproxy /var/lib/vaultproxy
+        chmod 750 /var/lib/vaultproxy
+
+        if [ -f /etc/vaultproxy/config.env ]; then
+            chmod 600 /etc/vaultproxy/config.env
+            chown root:vaultproxy /etc/vaultproxy/config.env 2>/dev/null || true
+        fi
+
+        if [ -d /run/systemd/system ]; then
+            systemctl --system daemon-reload >/dev/null 2>&1 || true
+        fi
+        ;;
+esac
+
+exit 0

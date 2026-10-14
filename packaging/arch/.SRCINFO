@@ -1,0 +1,28 @@
+pkgbase = vaultproxy
+	pkgdesc = Local-first, OpenAI-compatible privacy proxy for LLM apps focused on Indian data
+	pkgver = 0.2.1
+	pkgrel = 1
+	url = https://github.com/aniketchaudharyaa113/VaultProxy
+	install = vaultproxy.install
+	arch = any
+	license = MIT
+	makedepends = python-setuptools
+	makedepends = python-build
+	makedepends = python-installer
+	makedepends = python-wheel
+	depends = python>=3.10
+	depends = python-fastapi>=0.110.0
+	depends = python-uvicorn>=0.28.0
+	depends = python-httpx>=0.27.0
+	depends = python-pydantic>=2.6.0
+	depends = python-pydantic-settings>=2.0.0
+	depends = python-yaml>=6.0.1
+	backup = etc/vaultproxy/config.env
+	source = vaultproxy-0.2.1.tar.gz::https://github.com/aniketchaudharyaa113/VaultProxy/archive/refs/tags/v0.2.1.tar.gz
+	source = vaultproxy.service
+	source = config.env
+	sha256sums = SKIP
+	sha256sums = SKIP
+	sha256sums = SKIP
+
+pkgname = vaultproxy

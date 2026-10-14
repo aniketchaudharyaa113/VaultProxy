@@ -19,6 +19,6 @@
 | Phase 3 (pending) | - | - | - | - | - | - | Detection quality (verified formats, allow/deny lists, probe suite) |
 | Phase 4 (pending) | - | - | - | - | - | - | Latency optimizations (HMAC span cache, bounded parallel SLM) |
 | Phase 5 | 2026-10-14 | b3bbf41 | 237 | 81% | +160 | None (0 new settings) | Multi-language compatibility (Node, Spring Boot, Ruby, Go, Python) & route aliases |
-| Phase 6 (pending) | - | - | - | - | - | - | CI and release preparation (manual triggers, security scans) |
+| Phase 6 | 2026-10-14 | aa6b95a | 241 | 81% | +280 | None (0 new settings) | Native packaging trio (Arch PKGBUILD/AUR, Debian/Ubuntu .deb, Fedora/RHEL .spec), hardened systemd service |
 | Phase 7 (pending) | - | - | - | - | - | - | Real-use gates report (REAL_USE_GATES.md, soak, live checks) |
 

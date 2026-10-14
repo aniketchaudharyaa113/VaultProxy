@@ -1,0 +1,11 @@
+Package: vaultproxy
+Version: 0.2.1
+Section: net
+Priority: optional
+Architecture: all
+Depends: python3 (>= 3.10), python3-fastapi, python3-uvicorn, python3-httpx, python3-pydantic
+Maintainer: Aniket Chaudhary <aniketchaudharyaa113@users.noreply.github.com>
+Description: Local-first, OpenAI-compatible privacy proxy for LLM applications
+ VaultProxy intercepts prompt payloads to mask sensitive Indian personal data
+ and API secrets using deterministic checksum rules before forwarding upstream,
+ and restores original values in real time on streaming responses.

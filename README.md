@@ -110,7 +110,8 @@ VaultProxy can be installed locally from source or launched via Docker.
 ### 3-Step Setup
 
 #### Step 1: Install
-Clone the repository and install the package with CLI tools:
+
+**Option A: Python Virtual Environment (Developer / Cross-Platform)**
 ```bash
 git clone https://github.com/aniketchaudharyaa113/vaultproxy.git
 cd vaultproxy
@@ -118,6 +119,12 @@ python3 -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
 ```
+
+**Option B: Linux Native Packaging (Arch, Debian/Ubuntu, Fedora)**
+- **Arch Linux**: `yay -S vaultproxy` (or build via `cd packaging/arch && makepkg -si`)
+- **Debian / Ubuntu**: `sudo apt install -y ./dist/vaultproxy_0.2.1_all.deb` (build via `python packaging/build_deb.py`)
+- **Fedora / RHEL**: `sudo dnf install -y ./dist/rpmbuild/RPMS/noarch/vaultproxy-0.2.1-1*.rpm` (build via `python packaging/build_rpm.py`)
+- See [`docs/PACKAGING.md`](docs/PACKAGING.md) for full instructions, automated builds, and hardened systemd service details.
 
 #### Step 2: Initialize Configuration
 Run `vaultproxy init` to generate a `.env` file with a secure, 32-byte URL-safe authentication token:
@@ -500,6 +507,8 @@ Evaluated with `bench/run.py`:
 ## 13. Documentation Links
 
 - [Configuration Guide](docs/CONFIG.md)
+- [Multi-Language Compatibility Guide (Node, Spring Boot, Ruby, Go, Python)](docs/COMPATIBILITY.md)
+- [Linux Packaging Guide (Arch, Debian, Fedora)](docs/PACKAGING.md)
 - [Changelog](CHANGELOG.md)
 - [Security Policy](SECURITY.md)
 - [License](LICENSE)

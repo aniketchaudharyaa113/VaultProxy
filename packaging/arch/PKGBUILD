@@ -1,0 +1,38 @@
+# Maintainer: Aniket Chaudhary <aniketchaudharyaa113@users.noreply.github.com>
+pkgname=vaultproxy
+pkgver=0.2.1
+pkgrel=1
+pkgdesc="Local-first, OpenAI-compatible privacy proxy for LLM apps focused on Indian data"
+arch=('any')
+url="https://github.com/aniketchaudharyaa113/VaultProxy"
+license=('MIT')
+depends=(
+    'python>=3.10'
+    'python-fastapi>=0.110.0'
+    'python-uvicorn>=0.28.0'
+    'python-httpx>=0.27.0'
+    'python-pydantic>=2.6.0'
+    'python-pydantic-settings>=2.0.0'
+    'python-yaml>=6.0.1'
+)
+makedepends=('python-setuptools' 'python-build' 'python-installer' 'python-wheel')
+backup=('etc/vaultproxy/config.env')
+install=vaultproxy.install
+source=(
+    "$pkgname-$pkgver.tar.gz::https://github.com/aniketchaudharyaa113/VaultProxy/archive/refs/tags/v$pkgver.tar.gz"
+    "vaultproxy.service"
+    "config.env"
+)
+sha256sums=('SKIP' 'SKIP' 'SKIP')
+
+build() {
+    cd "$srcdir/$pkgname-$pkgver"
+    python -m build --wheel --no-isolation
+}
+
+package() {
+    cd "$srcdir/$pkgname-$pkgver"
+    python -m installer --destdir="$pkgdir" dist/*.whl
+    install -Dm644 "$srcdir/vaultproxy.service" "$pkgdir/usr/lib/systemd/system/vaultproxy.service"
+    install -Dm600 "$srcdir/config.env" "$pkgdir/etc/vaultproxy/config.env"
+}

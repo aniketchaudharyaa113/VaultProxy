@@ -1,0 +1,20 @@
+post_install() {
+    getent group vaultproxy >/dev/null || groupadd -r vaultproxy
+    getent passwd vaultproxy >/dev/null || useradd -r -g vaultproxy -d /var/lib/vaultproxy -s /usr/bin/nologin -c "VaultProxy daemon user" vaultproxy
+    mkdir -p /var/lib/vaultproxy
+    chown -R vaultproxy:vaultproxy /var/lib/vaultproxy
+    chmod 750 /var/lib/vaultproxy
+
+    echo "==> VaultProxy installed successfully."
+    echo "==> Edit /etc/vaultproxy/config.env to set your secrets and upstream URLs."
+    echo "==> Enable and start the service: systemctl enable --now vaultproxy"
+}
+
+post_upgrade() {
+    post_install
+}
+
+pre_remove() {
+    systemctl stop vaultproxy.service 2>/dev/null || true
+    systemctl disable vaultproxy.service 2>/dev/null || true
+}
