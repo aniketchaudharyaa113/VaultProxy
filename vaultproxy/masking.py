@@ -289,7 +289,7 @@ class MaskingEngine:
                     offsets.append((start_pos, end_pos, original_idx, text))
                     curr_pos = end_pos + 5
 
-                for chunk_start, chunk_end, chunk_str in chunks:
+                for chunk_start, _chunk_end, chunk_str in chunks:
                     if time.monotonic() - start_time > time_budget:
                         if settings.STRICT_MODE:
                             raise GemmaLayerError(
@@ -306,7 +306,7 @@ class MaskingEngine:
                     for span in gemma_spans:
                         adj_start = span.start + chunk_start
                         adj_end = span.end + chunk_start
-                        for start_pos, end_pos, orig_idx, text in offsets:
+                        for start_pos, end_pos, orig_idx, _text in offsets:
                             if adj_start >= start_pos and adj_end <= end_pos:
                                 rel_start = adj_start - start_pos
                                 rel_end = adj_end - start_pos

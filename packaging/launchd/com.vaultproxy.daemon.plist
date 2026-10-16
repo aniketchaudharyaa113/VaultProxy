@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.vaultproxy.daemon</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/vaultproxy</string>
+        <string>run</string>
+        <string>--host</string>
+        <string>127.0.0.1</string>
+        <string>--port</string>
+        <string>8000</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/var/log/vaultproxy.log</string>
+    <key>StandardErrorPath</key>
+    <string>/var/log/vaultproxy.err.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>VAULT_PROFILE</key>
+        <string>development</string>
+    </dict>
+</dict>
+</plist>

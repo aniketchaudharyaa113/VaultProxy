@@ -1,0 +1,11 @@
+<service>
+  <id>vaultproxy</id>
+  <name>VaultProxy Service</name>
+  <description>Local-first, OpenAI-compatible privacy proxy for LLM applications with dev and devops leak prevention.</description>
+  <executable>python.exe</executable>
+  <arguments>-m vaultproxy run --host 127.0.0.1 --port 8000</arguments>
+  <logmode>rotate</logmode>
+  <logpath>%BASE%\logs</logpath>
+  <env name="VAULT_PROFILE" value="development"/>
+  <onfailure action="restart" delay="10 sec"/>
+</service>

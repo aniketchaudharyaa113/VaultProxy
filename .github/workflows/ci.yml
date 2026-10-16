@@ -1,0 +1,92 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run Ruff Lint Checks
+        run: |
+          ruff check .
+
+      - name: Run Mypy Type Checks
+        run: |
+          mypy vaultproxy
+
+      - name: Run Pytest Suite with Coverage
+        run: |
+          pytest
+
+      - name: Run Multi-Platform Packaging Tests
+        run: |
+          pytest tests/test_packaging.py
+
+      - name: Run Smoke Tests
+        run: |
+          bash scripts/smoke.sh
+
+      - name: Run Production Hardening Verification
+        run: |
+          bash scripts/verify_production.sh
+
+      - name: Run Benchmark Suite
+        run: |
+          python bench/run.py
+
+  node-wrapper:
+    name: Node.js CLI Wrapper Check (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ["18", "20", "22"]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install VaultProxy Python Package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Verify Node.js Binary Launcher
+        run: |
+          node packaging/npm/bin/vaultproxy.js version
+          node packaging/npm/bin/vaultproxy.js check "API_KEY=sk-proj-abc123def456ghi789jkl012mno345pqr"
+          node packaging/npm/bin/vaultproxy.js scan packaging

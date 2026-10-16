@@ -15,7 +15,7 @@
 | UPI_ID | 100.00% | 100.00% | 100.00% | 21 | 0 | 0 |
 | **OVERALL** | **100.00%** | **100.00%** | **100.00%** | **126** | **0** | **0** |
 
-**Mean Latency:** 0.03 ms
+**Mean Latency:** 0.06 ms
 
 ## Held-Out Evaluation Dataset v1 (5 Samples)
 
@@ -30,7 +30,7 @@
 | UPI_ID | 100.00% | 100.00% | 100.00% | 1 | 0 | 0 |
 | **OVERALL** | **100.00%** | **100.00%** | **100.00%** | **9** | **0** | **0** |
 
-**Mean Latency:** 0.03 ms
+**Mean Latency:** 0.04 ms
 
 ## Held-Out Challenging Dataset v2 (40 Samples)
 
@@ -45,4 +45,4 @@
 | UPI_ID | 100.00% | 100.00% | 100.00% | 4 | 0 | 0 |
 | **OVERALL** | **97.37%** | **100.00%** | **98.67%** | **37** | **1** | **0** |
 
-**Mean Latency:** 0.02 ms
+**Mean Latency:** 0.03 ms

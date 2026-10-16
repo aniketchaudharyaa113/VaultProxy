@@ -2,13 +2,14 @@ import asyncio
 import subprocess
 import sys
 from unittest.mock import patch
+
 import httpx
 import pytest
 
 from vaultproxy.config import Settings, settings
 from vaultproxy.gemma_layer import GemmaLayerError, circuit_breaker, run_gemma_detection
 from vaultproxy.masking import MaskingEngine
-from vaultproxy.server import app, startup_event
+from vaultproxy.server import startup_event
 
 
 def test_b14_default_backend_is_off():

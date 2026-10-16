@@ -183,11 +183,8 @@ def test_gemma_autodiscover_off_missing_model_error():
              patch("httpx.AsyncClient.get", side_effect=mock_ollama_get):
 
             with patch("vaultproxy.config.settings.STRICT_MODE", True):
-                try:
+                with pytest.raises(GemmaLayerError, match="(?i)not installed"):
                     await run_gemma_detection("My name is Rajesh")
-                    assert False, "Should have raised GemmaLayerError"
-                except GemmaLayerError as exc:
-                    assert "not installed" in str(exc).lower()
 
     asyncio.run(_run())
 
@@ -244,11 +241,8 @@ def test_gemma_queue_timeout_exceeded():
                 await sem.acquire()
 
             try:
-                try:
+                with pytest.raises(GemmaLayerError, match="(?i)queue timeout"):
                     await run_gemma_detection("Testing queue timeout")
-                    assert False, "Should have raised GemmaLayerError for queue timeout"
-                except GemmaLayerError as exc:
-                    assert "queue timeout" in str(exc).lower()
             finally:
                 for _ in range(4):
                     sem.release()

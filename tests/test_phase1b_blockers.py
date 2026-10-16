@@ -10,7 +10,6 @@ This file tests:
   B10 – merge_spans correctness (no drops, no overlaps)
 """
 
-import asyncio
 import json
 import random
 from unittest.mock import AsyncMock, patch
@@ -24,7 +23,6 @@ from vaultproxy.detectors import Span
 from vaultproxy.masking import has_non_text_parts
 from vaultproxy.merge import merge_spans
 from vaultproxy.server import app
-from vaultproxy.vault import RequestVault
 
 # ─── shared helpers ───────────────────────────────────────────────────────────
 

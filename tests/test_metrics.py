@@ -1,10 +1,9 @@
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
-import pytest
 
-from vaultproxy.config import settings
 import vaultproxy.metrics as metrics_mod
+from vaultproxy.config import settings
 from vaultproxy.metrics import (
     generate_latest,
     record_request_metrics,

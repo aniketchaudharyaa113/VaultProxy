@@ -1,16 +1,15 @@
 import asyncio
 import json
-import os
 import time
 from typing import NamedTuple
 
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
 import httpx
 import uvicorn
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
-from vaultproxy.server import app as proxy_app
 from vaultproxy.config import settings
+from vaultproxy.server import app as proxy_app
 
 # 1. Mock Upstream Cloud LLM Server (port 8001)
 mock_upstream_app = FastAPI()

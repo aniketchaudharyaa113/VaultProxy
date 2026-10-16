@@ -269,7 +269,7 @@ async def demo_run(payload: dict[str, Any]) -> dict[str, Any]:
                 raise HTTPException(
                     status_code=503,
                     detail=f"VaultProxy fail-closed: Gemma layer error in STRICT_MODE. {gle}",
-                )
+                ) from gle
             degraded = True
             gemma_used = True
 

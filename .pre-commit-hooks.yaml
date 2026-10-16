@@ -1,0 +1,15 @@
+- id: vaultproxy-scan
+  name: VaultProxy Sensitive Data & Secret Scanner
+  description: Scan files for secrets, credentials, and PII leaks before commit
+  entry: vaultproxy scan --fail-on-secrets
+  language: python
+  types: [text]
+  stages: [pre-commit]
+
+- id: vaultproxy-check
+  name: VaultProxy Dry-run File Check
+  description: Check modified files for sensitive tokens and print masked preview
+  entry: vaultproxy check --fail-on-secrets --file
+  language: python
+  types: [text]
+  stages: [pre-commit]

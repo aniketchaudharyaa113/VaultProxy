@@ -1,8 +1,8 @@
-import asyncio
 import argparse
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+import asyncio
+
 import uvicorn
+from fastapi import FastAPI
 
 app = FastAPI()
 DELAY_SECONDS = 2.0

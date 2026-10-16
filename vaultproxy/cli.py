@@ -6,7 +6,6 @@ import socket
 import sys
 import time
 from pathlib import Path
-from typing import Any
 from urllib.parse import urlparse
 
 import httpx
@@ -61,8 +60,37 @@ def build_parser() -> argparse.ArgumentParser:
     )
     check_parser.add_argument("text", nargs="?", default=None, help="Text to scan and mask")
     check_parser.add_argument("--file", "-f", default=None, help="File path containing text to scan and mask")
+    check_parser.add_argument(
+        "--fail-on-secrets",
+        "--strict",
+        action="store_true",
+        help="Exit with code 1 if sensitive entities are detected",
+    )
+    check_parser.add_argument(
+        "--json", action="store_true", help="Output results in JSON format"
+    )
 
-    # 5. version
+    # 5. scan
+    scan_parser = subparsers.add_parser(
+        "scan", help="Scan files or directories for secrets, PII, and credentials"
+    )
+    scan_parser.add_argument(
+        "paths",
+        nargs="*",
+        default=["."],
+        help="Paths to files or directories to scan (default: current directory)",
+    )
+    scan_parser.add_argument(
+        "--fail-on-secrets",
+        "--strict",
+        action="store_true",
+        help="Exit with code 1 if sensitive entities are detected",
+    )
+    scan_parser.add_argument(
+        "--json", action="store_true", help="Output results in JSON format"
+    )
+
+    # 6. version
     subparsers.add_parser("version", help="Print VaultProxy version")
 
     return parser
@@ -128,15 +156,140 @@ def cmd_check(args: argparse.Namespace) -> int:
     masked_text = engine.mask_text(content)
     counts = vault.type_counts
 
-    print("=== VaultProxy Check (Dry Run) ===")
-    if counts:
-        entities_summary = ", ".join(f"{k}: {v}" for k, v in sorted(counts.items()))
-        print(f"Detected entities ({sum(counts.values())} total): {entities_summary}")
-    else:
-        print("No sensitive entities detected.")
+    if getattr(args, "json", False):
+        import json as _json
 
-    print("\n--- Masked Output ---")
-    print(masked_text)
+        output_data = {
+            "detected": bool(counts),
+            "counts": counts,
+            "total_entities": sum(counts.values()),
+            "masked_output": masked_text,
+        }
+        print(_json.dumps(output_data, indent=2))
+    else:
+        print("=== VaultProxy Check (Dry Run) ===")
+        if counts:
+            entities_summary = ", ".join(f"{k}: {v}" for k, v in sorted(counts.items()))
+            print(f"Detected entities ({sum(counts.values())} total): {entities_summary}")
+        else:
+            print("No sensitive entities detected.")
+
+        print("\n--- Masked Output ---")
+        print(masked_text)
+
+    if getattr(args, "fail_on_secrets", False) and counts:
+        return 1
+    return 0
+
+
+def cmd_scan(args: argparse.Namespace) -> int:
+    raw_paths = getattr(args, "paths", None)
+    if not raw_paths:
+        raw_paths = [getattr(args, "path", ".")]
+
+    files_to_scan: list[Path] = []
+    seen_files: set[Path] = set()
+
+    ignore_dirs = {
+        ".git",
+        ".venv",
+        "venv",
+        "node_modules",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".mypy_cache",
+        "dist",
+        "build",
+        "__pycache__",
+    }
+    scan_extensions = (
+        ".env",
+        ".json",
+        ".yaml",
+        ".yml",
+        ".conf",
+        ".properties",
+        ".toml",
+        ".ini",
+        ".txt",
+        ".cfg",
+        ".cnf",
+        ".xml",
+        ".sh",
+        ".bash",
+        ".zsh",
+    )
+    scan_filenames = {"Dockerfile", "docker-compose.yml", "Podfile"}
+
+    for p_str in raw_paths:
+        scan_target = Path(p_str)
+        if not scan_target.exists():
+            print(f"[FAIL] Target path not found: {p_str}", file=sys.stderr)
+            return 1
+
+        if scan_target.is_file():
+            resolved = scan_target.resolve()
+            if resolved not in seen_files:
+                seen_files.add(resolved)
+                files_to_scan.append(scan_target)
+        else:
+            for root, dirs, files in os.walk(scan_target):
+                dirs[:] = [d for d in dirs if d not in ignore_dirs]
+                for file in files:
+                    p = Path(root) / file
+                    if (
+                        file.startswith(".env")
+                        or file.endswith(scan_extensions)
+                        or file in scan_filenames
+                    ):
+                        try:
+                            if p.stat().st_size <= 1048576:
+                                resolved = p.resolve()
+                                if resolved not in seen_files:
+                                    seen_files.add(resolved)
+                                    files_to_scan.append(p)
+                        except OSError:
+                            pass
+
+    total_findings: dict[str, dict[str, int]] = {}
+    total_entities_count = 0
+
+    for file_path in files_to_scan:
+        try:
+            content = file_path.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            continue
+        if not content.strip():
+            continue
+        vault = RequestVault()
+        engine = MaskingEngine(vault)
+        engine.mask_text(content)
+        if vault.type_counts:
+            total_findings[str(file_path)] = dict(vault.type_counts)
+            total_entities_count += sum(vault.type_counts.values())
+
+    if getattr(args, "json", False):
+        import json as _json
+
+        output_data = {
+            "files_scanned": len(files_to_scan),
+            "files_with_findings": len(total_findings),
+            "total_entities": total_entities_count,
+            "findings": total_findings,
+        }
+        print(_json.dumps(output_data, indent=2))
+    else:
+        print(f"=== VaultProxy Scan ({len(files_to_scan)} files scanned) ===")
+        if total_findings:
+            print(f"[WARN] Sensitive entities found in {len(total_findings)} file(s):")
+            for fpath, counts in sorted(total_findings.items()):
+                summary = ", ".join(f"{k}: {v}" for k, v in sorted(counts.items()))
+                print(f"  - {fpath}: {summary}")
+        else:
+            print("[PASS] No sensitive entities or credentials detected.")
+
+    if getattr(args, "fail_on_secrets", False) and total_findings:
+        return 1
     return 0
 
 
@@ -156,7 +309,7 @@ async def run_doctor(port: int = 8000) -> int:
 
     # 1. Python version
     py_ver = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-    if sys.version_info >= (3, 10):
+    if sys.version_info >= (3, 10):  # noqa: UP036
         print(f"[PASS] Python version: {py_ver}")
     else:
         print(f"[FAIL] Python version: {py_ver} (Python >= 3.10 required)")
@@ -234,7 +387,7 @@ async def run_doctor(port: int = 8000) -> int:
                     print(f"[PASS] Ollama reachable at {ollama_url}, model '{settings.GEMMA_MODEL}' installed (latency: {t_latency:.1f}ms)")
                 else:
                     print(f"[WARN] Ollama reachable, but model '{settings.GEMMA_MODEL}' not found. (Fix hint: run 'ollama pull {settings.GEMMA_MODEL}')")
-                
+
                 # SLM concurrency and estimated throughput
                 concurrency = getattr(settings, "GEMMA_CONCURRENCY_LIMIT", 4)
                 latency_sec = max(t_latency / 1000.0, 0.05)
@@ -316,6 +469,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_init()
     elif args.command == "check":
         return cmd_check(args)
+    elif args.command == "scan":
+        return cmd_scan(args)
     elif args.command == "doctor":
         return cmd_doctor(args)
     elif args.command == "run":

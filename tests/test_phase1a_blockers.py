@@ -9,7 +9,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from vaultproxy.config import settings
-from vaultproxy.server import app, get_concurrency_semaphore
+from vaultproxy.server import app
+
 try:
     from vaultproxy.server import build_upstream_url
 except ImportError:
@@ -74,11 +75,11 @@ def test_b2_shared_client_not_closed_by_stream():
         shared_client = httpx.AsyncClient()
         mock_resp = AsyncMock()
 
-        async def mock_aiter_lines():
-            yield "data: {\"choices\": [{\"delta\": {\"content\": \"hi\"}}]}"
-            yield "data: [DONE]"
+        async def mock_aiter_bytes():
+            yield b'data: {"choices": [{"delta": {"content": "hi"}}]}\n\n'
+            yield b"data: [DONE]\n\n"
 
-        mock_resp.aiter_lines = mock_aiter_lines
+        mock_resp.aiter_bytes = mock_aiter_bytes
         mock_resp.aclose = AsyncMock()
 
         vault = RequestVault()
@@ -179,8 +180,14 @@ def test_b4_concurrency_limit_held_during_stream():
         assert any("[DONE]" in ln for ln in collected), (
             f"Stream must end with [DONE]; got lines: {collected}"
         )
+        srv._concurrency_semaphore = None
+        srv._concurrency_loop = None
 
-    asyncio.run(_run())
+    try:
+        asyncio.run(_run())
+    finally:
+        srv._concurrency_semaphore = None
+        srv._concurrency_loop = None
 
 
 # ============================================================================

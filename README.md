@@ -105,26 +105,46 @@ Restores sensitive entities in real time on streaming and non-streaming model re
 
 ## 3. Quickstart & Developer Guide
 
-VaultProxy can be installed locally from source or launched via Docker.
+VaultProxy can be installed across **Linux**, **macOS**, and **Windows** via your tool of choice, or run via Docker.
 
 ### 3-Step Setup
 
 #### Step 1: Install
 
-**Option A: Python Virtual Environment (Developer / Cross-Platform)**
+**Option A: Universal CLI Tools (`pipx` / `uv` / `pip`)**
 ```bash
-git clone https://github.com/aniketchaudharyaa113/vaultproxy.git
-cd vaultproxy
-python3 -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\Activate.ps1
-pip install -e ".[dev]"
+# Isolated application install (Recommended)
+pipx install vaultproxy
+# Or with uv tool (Fastest)
+uv tool install vaultproxy
+# Or standard pip
+pip install vaultproxy
 ```
 
-**Option B: Linux Native Packaging (Arch, Debian/Ubuntu, Fedora)**
+**Option B: Node.js / Web Developers (`npx` / `npm`)**
+```bash
+# Zero-install direct execution:
+npx vaultproxy run
+# Or global npm install:
+npm install -g vaultproxy
+```
+
+**Option C: macOS (Homebrew)**
+```bash
+brew install aniketchaudharyaa113/tap/vaultproxy
+brew services start vaultproxy
+```
+
+**Option D: Windows (PowerShell)**
+```powershell
+.\packaging\windows\install.ps1
+```
+
+**Option E: Linux Native Packaging (Arch, Debian/Ubuntu, Fedora)**
 - **Arch Linux**: `yay -S vaultproxy` (or build via `cd packaging/arch && makepkg -si`)
 - **Debian / Ubuntu**: `sudo apt install -y ./dist/vaultproxy_0.2.1_all.deb` (build via `python packaging/build_deb.py`)
 - **Fedora / RHEL**: `sudo dnf install -y ./dist/rpmbuild/RPMS/noarch/vaultproxy-0.2.1-1*.rpm` (build via `python packaging/build_rpm.py`)
-- See [`docs/PACKAGING.md`](docs/PACKAGING.md) for full instructions, automated builds, and hardened systemd service details.
+- See [`docs/PACKAGING.md`](docs/PACKAGING.md) for full instructions, automated builds, and background daemon services.
 
 #### Step 2: Initialize Configuration
 Run `vaultproxy init` to generate a `.env` file with a secure, 32-byte URL-safe authentication token:
@@ -138,6 +158,8 @@ vaultproxy init
 **1. Dry-run detection locally (no server or upstream needed):**
 ```bash
 vaultproxy check "My PAN is ABCPB1234F and Aadhaar is 367598341203"
+# Or check a file for leaked secrets:
+vaultproxy check --file .env
 ```
 
 **2. Check system health and diagnostics:**
@@ -163,8 +185,19 @@ The `vaultproxy` command-line interface provides zero-dependency developer tools
 | `run` | `vaultproxy run [--host 127.0.0.1] [--port 8000] [--upstream URL] [--strict] [--workers 1]` | Starts the proxy server |
 | `init` | `vaultproxy init` | Generates a `.env` with a secure random token (never overwrites) |
 | `doctor` | `vaultproxy doctor [--port 8000]` | Diagnostics for Python version, port, upstream, auth token, and SLM |
-| `check` | `vaultproxy check "<text>" [--file <path>]` | Dry-run entity detection without upstream calls |
+| `check` | `vaultproxy check "<text>" [--file <path>] [--fail-on-secrets] [--json]` | Dry-run entity detection without upstream calls |
+| `scan` | `vaultproxy scan [<path>] [--fail-on-secrets] [--json]` | Scans files and directories for leaked secrets and credentials |
 | `version` | `vaultproxy version` | Prints package version |
+
+### Developer & DevOps Leak Prevention (`.env`, Connection Strings, Cloud Keys)
+
+When developers paste configuration files or stack traces into AI code assistants, credentials can leak to model providers. VaultProxy inspects incoming requests and masks:
+
+- **`.env` and Export Assignments**: Detects key-value lines (`DATABASE_URL=...`, `DB_PASSWORD="secret"`, `export GITHUB_TOKEN=...`) and replaces secret values with tokens (`[SECRET_1]`, `[SECRET_2]`) while preserving file structure and non-sensitive options (`PORT=8000`, `NODE_ENV=production`).
+- **Database Connection URIs**: Detects PostgreSQL, MySQL, MongoDB, Redis, and AMQP connection strings containing passwords or hostnames (`postgres://user:pass@host:5432/db`).
+- **Cloud & SaaS Tokens**: Detects AWS access keys (`AKIA...`, `ASIA...`), GitHub tokens (`ghp_...`, `github_pat_...`), GitLab PATs, Slack incoming webhooks and tokens, Stripe keys, HuggingFace, PyPI, and NPM tokens.
+- **Private Keys**: Detects PEM RSA, OpenSSH, and PGP private key blocks.
+- **CI/CD & Pre-commit Audit**: Use `vaultproxy scan --fail-on-secrets` in CI/CD or `.pre-commit-hooks.yaml` to detect accidental secret leaks prior to commit.
 
 ### Testing Locally with the Bundled Mock Upstream
 

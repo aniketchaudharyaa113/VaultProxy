@@ -1,0 +1,37 @@
+{
+  "name": "vaultproxy",
+  "version": "0.2.1",
+  "description": "Local-first, OpenAI-compatible privacy proxy for LLM apps with dev and devops leak prevention",
+  "main": "bin/vaultproxy.js",
+  "bin": {
+    "vaultproxy": "bin/vaultproxy.js"
+  },
+  "scripts": {
+    "test": "node bin/vaultproxy.js version"
+  },
+  "keywords": [
+    "privacy",
+    "proxy",
+    "openai",
+    "llm",
+    "ai",
+    "security",
+    "devops",
+    "secrets",
+    "pii",
+    "masking"
+  ],
+  "author": "Aniket Chaudhary",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aniketchaudharyaa113/vaultproxy.git"
+  },
+  "bugs": {
+    "url": "https://github.com/aniketchaudharyaa113/vaultproxy/issues"
+  },
+  "homepage": "https://github.com/aniketchaudharyaa113/vaultproxy#readme",
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-import asyncio
 import argparse
-import sys
+import asyncio
 import time
 from typing import NamedTuple
 
 import httpx
+
 
 class Result(NamedTuple):
     status_code: int
@@ -17,7 +17,7 @@ async def send_request(client: httpx.AsyncClient, url: str, headers: dict, paylo
         resp = await client.post(url, json=payload, headers=headers)
         latency = (time.perf_counter() - t0) * 1000.0
         return Result(resp.status_code, latency)
-    except Exception as e:
+    except Exception:
         latency = (time.perf_counter() - t0) * 1000.0
         return Result(503, latency)
 

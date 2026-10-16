@@ -147,7 +147,6 @@ class _Proc:
 
 def _start_upstream(tmpdir: str) -> tuple[str, str]:
     """Start a bare mock upstream; returns (base_url, log_path)."""
-    import tempfile
 
     src_path = os.path.join(tmpdir, "upstream.py")
     open(src_path, "w").write(UPSTREAM_SRC)
@@ -380,7 +379,7 @@ class TestSlotConservation:
     def _make_mock_client(self, stream: bool = False):
         if stream:
             async def handler(req: httpx.Request) -> httpx.Response:
-                body = await req.aread()
+                _ = await req.aread()
                 async def body_gen():
                     for i in range(3):
                         chunk = json.dumps({
@@ -427,7 +426,6 @@ class TestSlotConservation:
 
             # Run 100 non-stream requests
             async def _run_many():
-                from vaultproxy.server import get_httpx_client
                 ok_resp = httpx.Response(
                     200,
                     headers={"content-type": "application/json"},
@@ -454,6 +452,16 @@ class TestSlotConservation:
                             content=b"not-json",
                             headers={"content-type": "application/json"},
                         )
+                    elif i % 10 == 5:
+                        # upstream error 500
+                        with patch("httpx.AsyncClient.send",
+                                   new_callable=AsyncMock,
+                                   return_value=bad_resp):
+                            client.post(
+                                "/v1/chat/completions",
+                                json={"messages": [{"role": "user",
+                                                    "content": "hello"}]},
+                            )
                     elif i % 10 == 7:
                         # 413 body-too-large path
                         with patch.object(settings, "MAX_BODY_BYTES", 1):
@@ -529,7 +537,7 @@ class TestB1Streaming:
                 assert "content-encoding" not in resp.headers, (
                     "content-encoding header must be stripped from streaming response"
                 )
-                lines = [l for l in resp.iter_lines() if l.startswith("data:")]
+                lines = [line for line in resp.iter_lines() if line.startswith("data:")]
                 assert len(lines) >= 1, (
                     "Expected at least one SSE data line from decoded gzip stream"
                 )

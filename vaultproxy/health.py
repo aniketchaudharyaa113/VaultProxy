@@ -99,4 +99,4 @@ async def demo_page() -> Response:
     except FileNotFoundError:
         raise HTTPException(
             status_code=404, detail="demo/console/index.html not found."
-        )
+        ) from None

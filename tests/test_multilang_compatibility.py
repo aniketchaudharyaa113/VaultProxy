@@ -2,7 +2,6 @@ import json
 from unittest.mock import AsyncMock, patch
 
 import httpx
-import pytest
 from fastapi.testclient import TestClient
 
 from vaultproxy.config import settings

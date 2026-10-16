@@ -50,7 +50,6 @@ def run_demo():
             "stream": True,
         }
 
-        received_tokens = []
         with client.stream(
             "POST", "http://localhost:8000/v1/chat/completions", json=req_body_stream
         ) as res_stream:

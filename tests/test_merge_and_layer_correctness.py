@@ -131,8 +131,13 @@ def test_gemma_layer_error_paths_behavior():
         circuit_breaker.record_success()
 
         # Queue timeout in STRICT_MODE
+        async def mock_timeout(fut, *args, **kwargs):
+            if hasattr(fut, "close"):
+                fut.close()
+            raise TimeoutError()
+
         with patch.object(settings, "GEMMA_BACKEND", "ollama"), patch.object(settings, "STRICT_MODE", True):
-            with patch("asyncio.wait_for", side_effect=TimeoutError()):
+            with patch("asyncio.wait_for", side_effect=mock_timeout):
                 with pytest.raises(GemmaLayerError, match="queue timeout"):
                     await run_gemma_detection("My name is Ramesh")
 
@@ -140,7 +145,7 @@ def test_gemma_layer_error_paths_behavior():
 
         # Queue timeout in non-STRICT mode
         with patch.object(settings, "GEMMA_BACKEND", "ollama"), patch.object(settings, "STRICT_MODE", False):
-            with patch("asyncio.wait_for", side_effect=TimeoutError()):
+            with patch("asyncio.wait_for", side_effect=mock_timeout):
                 spans, degraded, gemma_used = await run_gemma_detection("My name is Ramesh")
                 assert degraded is True
                 assert gemma_used is False

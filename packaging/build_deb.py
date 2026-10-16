@@ -9,8 +9,6 @@ from __future__ import annotations
 
 import io
 import os
-import shutil
-import stat
 import tarfile
 import time
 from pathlib import Path
@@ -100,12 +98,12 @@ def create_data_archive() -> bytes:
 
         # 1. Executable wrapper in /usr/bin/vaultproxy
         wrapper_script = (
-            "#!/usr/bin/env python3\n"
-            "import sys\n"
-            "from vaultproxy.cli import main\n"
-            "if __name__ == '__main__':\n"
-            "    sys.exit(main())\n"
-        ).encode("utf-8")
+            b"#!/usr/bin/env python3\n"
+            b"import sys\n"
+            b"from vaultproxy.cli import main\n"
+            b"if __name__ == '__main__':\n"
+            b"    sys.exit(main())\n"
+        )
         ti = make_tarinfo("./usr/bin/vaultproxy", len(wrapper_script), 0o755, now)
         tar.addfile(ti, io.BytesIO(wrapper_script))
 

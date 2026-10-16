@@ -66,7 +66,7 @@
       "tp": 126,
       "fp": 0,
       "fn": 0,
-      "mean_latency_ms": 0.03
+      "mean_latency_ms": 0.06
     },
     "false_positives": [],
     "false_negatives": []
@@ -137,7 +137,7 @@
       "tp": 9,
       "fp": 0,
       "fn": 0,
-      "mean_latency_ms": 0.03
+      "mean_latency_ms": 0.04
     },
     "false_positives": [],
     "false_negatives": []
@@ -208,7 +208,7 @@
       "tp": 37,
       "fp": 1,
       "fn": 0,
-      "mean_latency_ms": 0.02
+      "mean_latency_ms": 0.03
     },
     "false_positives": [
       {
@@ -284,6 +284,6 @@
     "tp": 126,
     "fp": 0,
     "fn": 0,
-    "mean_latency_ms": 0.03
+    "mean_latency_ms": 0.06
   }
 }

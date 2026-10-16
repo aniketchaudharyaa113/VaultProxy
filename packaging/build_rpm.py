@@ -55,11 +55,11 @@ def build_rpm() -> None:
 
     if not shutil.which("rpmbuild"):
         print("\nNote: 'rpmbuild' is not installed on this system.")
-        print(f"To build the RPM on Fedora/RHEL, run:")
-        print(f"  mkdir -p ~/rpmbuild/SOURCES ~/rpmbuild/SPECS")
+        print("To build the RPM on Fedora/RHEL, run:")
+        print("  mkdir -p ~/rpmbuild/SOURCES ~/rpmbuild/SPECS")
         print(f"  cp {source_tar} ~/rpmbuild/SOURCES/")
         print(f"  cp {SPEC_FILE} ~/rpmbuild/SPECS/")
-        print(f"  rpmbuild -ba ~/rpmbuild/SPECS/vaultproxy.spec")
+        print("  rpmbuild -ba ~/rpmbuild/SPECS/vaultproxy.spec")
         print(f"  sudo dnf install ~/rpmbuild/RPMS/noarch/vaultproxy-{VERSION}-1*.rpm")
         return
 

@@ -26,7 +26,7 @@ Homepage = "https://github.com/aniketchaudharyaa113/vaultproxy"
 Repository = "https://github.com/aniketchaudharyaa113/vaultproxy"
 
 [project.scripts]
-vaultproxy = "vaultproxy.server:main"
+vaultproxy = "vaultproxy.cli:main"
 
 [project.optional-dependencies]
 dev = [
@@ -50,7 +50,7 @@ extend-exclude = ["scripts/vp_review_check.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
-ignore = []
+ignore = ["E501"]
 
 [tool.mypy]
 python_version = "3.10"

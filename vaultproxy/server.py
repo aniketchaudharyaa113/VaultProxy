@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import sys
 import time
 import uuid
 from collections.abc import AsyncGenerator
@@ -147,6 +148,7 @@ PRODUCTION_ALLOWED_ROUTES = {
 }
 
 _concurrency_semaphore: asyncio.Semaphore | None = None
+_concurrency_loop: asyncio.AbstractEventLoop | None = None
 
 
 def build_upstream_url(base_url: str, endpoint: str) -> str:
@@ -185,9 +187,14 @@ def get_httpx_client() -> httpx.AsyncClient:
 
 
 def get_concurrency_semaphore() -> asyncio.Semaphore:
-    global _concurrency_semaphore
-    if _concurrency_semaphore is None:
+    global _concurrency_semaphore, _concurrency_loop
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if _concurrency_semaphore is None or _concurrency_loop != loop:
         _concurrency_semaphore = asyncio.Semaphore(settings.MAX_CONCURRENT_REQUESTS)
+        _concurrency_loop = loop
     return _concurrency_semaphore
 
 
@@ -281,11 +288,11 @@ async def parse_and_validate_request_body(request: Request) -> tuple[bytes, dict
     except UnicodeDecodeError:
         raise HTTPException(
             status_code=400, detail="Invalid UTF-8 encoding in request body."
-        )
+        ) from None
     except json.JSONDecodeError:
         raise HTTPException(
             status_code=400, detail="Request body is not valid JSON."
-        )
+        ) from None
 
     return body_bytes, body_json
 
@@ -356,7 +363,7 @@ async def get_models(request: Request) -> Response:
         raise HTTPException(
             status_code=503,
             detail="VaultProxy fail-closed: Upstream models endpoint error.",
-        )
+        ) from e
 
     ms = round((time.perf_counter() - t0) * 1000, 2)
     logger.info(
@@ -457,7 +464,7 @@ async def embeddings(request: Request) -> Response:
             raise HTTPException(
                 status_code=503,
                 detail="VaultProxy fail-closed: Internal masking failure.",
-            )
+            ) from e
 
         headers = clean_headers(request.headers)
         headers["content-type"] = "application/json"
@@ -492,7 +499,7 @@ async def embeddings(request: Request) -> Response:
             raise HTTPException(
                 status_code=503,
                 detail="VaultProxy fail-closed: Upstream connection error.",
-            )
+            ) from e
 
         ms = round((time.perf_counter() - t0) * 1000, 2)
         logger.info(
@@ -597,13 +604,13 @@ async def chat_completions(request: Request) -> Response:
             raise HTTPException(
                 status_code=503,
                 detail=f"VaultProxy fail-closed: Gemma layer error in STRICT_MODE. {gle}",
-            )
+            ) from gle
         except Exception as e:
             logger.error(f"Fail-closed: Error during request masking: {type(e).__name__}")
             raise HTTPException(
                 status_code=503,
                 detail="VaultProxy fail-closed: Internal masking failure.",
-            )
+            ) from e
 
         headers = clean_headers(request.headers)
         headers["content-type"] = "application/json"
@@ -696,7 +703,7 @@ async def chat_completions(request: Request) -> Response:
             raise HTTPException(
                 status_code=503,
                 detail="VaultProxy fail-closed: Upstream connection error or internal failure.",
-            )
+            ) from e
 
         ms = round((time.perf_counter() - t0) * 1000, 2)
         logger.info(
@@ -725,7 +732,7 @@ async def chat_completions(request: Request) -> Response:
 def main() -> None:
     from vaultproxy.cli import main as cli_main
 
-    cli_main()
+    sys.exit(cli_main())
 
 
 if __name__ == "__main__":

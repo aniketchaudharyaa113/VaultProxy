@@ -1,12 +1,10 @@
-import os
 import subprocess
 import sys
-from pathlib import Path
 
 import pytest
 
 from vaultproxy import __version__
-from vaultproxy.cli import build_parser, main
+from vaultproxy.cli import main
 
 
 def test_cli_version(capsys):
@@ -47,6 +45,51 @@ def test_cli_check_file(tmp_path, capsys):
     assert "[AADHAAR_1]" in captured.out
 
 
+def test_cli_check_fail_on_secrets(capsys):
+    # Has secret -> exits with 1
+    ret1 = main(["check", "DATABASE_URL=postgres://root:secret@db:5432/app", "--fail-on-secrets"])
+    assert ret1 == 1
+    captured1 = capsys.readouterr()
+    assert "SECRET: 1" in captured1.out
+
+    # Clean text -> exits with 0
+    ret2 = main(["check", "This is clean safe text.", "--fail-on-secrets"])
+    assert ret2 == 0
+
+
+def test_cli_check_json_output(capsys):
+    ret = main(["check", "API_KEY=sk-proj-1234567890abcdef1234567890abcdef", "--json"])
+    assert ret == 0
+    captured = capsys.readouterr()
+    assert '"detected": true' in captured.out
+    assert '"SECRET": 1' in captured.out
+
+
+def test_cli_scan_command(tmp_path, capsys):
+    # Setup test directory with a clean file and a leaked .env
+    clean_file = tmp_path / "app.json"
+    clean_file.write_text('{"name": "myapp", "port": 3000}', encoding="utf-8")
+
+    env_file = tmp_path / ".env.production"
+    env_file.write_text("DATABASE_URL=postgres://app:dbpass@db:5432/main\nSECRET_KEY=supersecretkey", encoding="utf-8")
+
+    # 1. Scan directory should find the leaked .env file and fail when --fail-on-secrets is set
+    ret = main(["scan", str(tmp_path), "--fail-on-secrets"])
+    assert ret == 1
+    captured = capsys.readouterr()
+    assert "=== VaultProxy Scan" in captured.out
+    assert ".env.production" in captured.out
+    assert "SECRET: 2" in captured.out
+
+    # 2. Scan multiple explicit files directly (pre-commit behavior)
+    ret_multi = main(["scan", str(clean_file), str(env_file), "--fail-on-secrets"])
+    assert ret_multi == 1
+
+    # 3. Scan clean file passes with 0
+    ret_clean = main(["scan", str(clean_file), "--fail-on-secrets"])
+    assert ret_clean == 0
+
+
 def test_cli_init_and_no_overwrite(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     env_file = tmp_path / ".env"
@@ -70,7 +113,7 @@ def test_cli_init_and_no_overwrite(tmp_path, monkeypatch, capsys):
 
 
 def test_cli_doctor(capsys):
-    ret = main(["doctor"])
+    assert main(["doctor"]) == 0
     captured = capsys.readouterr()
     assert "VaultProxy Doctor Diagnostics" in captured.out
     assert "Python version" in captured.out

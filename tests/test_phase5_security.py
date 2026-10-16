@@ -228,6 +228,7 @@ def test_unexpected_masking_exceptions_fail_closed_with_503(caplog):
 def test_stream_timeout_and_long_healthy_stream():
     """Item 3: REQUEST_TIMEOUT_SECONDS resilience - long healthy streams succeed, silent streams end cleanly with error event."""
     import anyio
+
     from vaultproxy.restore import process_sse_stream
     from vaultproxy.vault import RequestVault
 
@@ -239,7 +240,7 @@ def test_stream_timeout_and_long_healthy_stream():
         async def healthy_chunks():
             for i in range(5):
                 chunk_json = json.dumps({"choices": [{"index": 0, "delta": {"content": f"Chunk {i} with {tok} "}}]})
-                yield f"data: {chunk_json}\n\n".encode("utf-8")
+                yield f"data: {chunk_json}\n\n".encode()
             yield b"data: [DONE]\n\n"
 
         mock_resp = AsyncMock()
@@ -260,7 +261,7 @@ def test_stream_timeout_and_long_healthy_stream():
         # 2. Mock stream that goes silent / raises ReadTimeout mid-stream
         async def silent_stream():
             chunk_json = json.dumps({"choices": [{"index": 0, "delta": {"content": f"Partial {tok}"}}]})
-            yield f"data: {chunk_json}\n\n".encode("utf-8")
+            yield f"data: {chunk_json}\n\n".encode()
             raise httpx.ReadTimeout("Stream idle timeout exceeded")
 
         mock_resp_silent = AsyncMock()
@@ -393,8 +394,9 @@ def test_auth_before_work_short_circuit():
 
 def test_production_startup_refusal_constraints():
     """Item 7: Production startup refusal checks for token, length, and demo mode."""
-    from vaultproxy.config import Settings
     import os
+
+    from vaultproxy.config import Settings
 
     with patch.dict(os.environ, {"VAULT_AUTH_TOKEN": "", "DEMO_MODE": "false"}, clear=False):
         # Missing token -> ValueError mentioning VAULT_AUTH_TOKEN

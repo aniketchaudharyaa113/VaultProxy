@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+
 try:
     from openai import OpenAI
 except ImportError:
@@ -614,7 +615,7 @@ def test_restore_sse_legacy_function_calls_and_partial_tokens_behavior():
         mock_upstream2.aclose = AsyncMock()
 
         gen2 = process_sse_stream(mock_upstream2, mock_client, vault2, "gpt-4o")
-        res2 = [l async for l in gen2]
+        res2 = [chunk async for chunk in gen2]
         full2 = "".join(res2)
         assert "[MOB" in full2
 

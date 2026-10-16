@@ -1,140 +1,151 @@
-# Linux Distribution Packaging Guide (Arch, Debian, Fedora)
+# VaultProxy Universal Packaging & Distribution Guide
 
-VaultProxy provides first-class native Linux packaging for the primary distribution families:
-- **Arch Linux** (`pacman` / AUR)
-- **Debian / Ubuntu** (`apt` / `.deb`)
-- **Fedora / RHEL / CentOS** (`dnf` / `.rpm`)
-
-All packages include a hardened, isolated systemd service running under an unprivileged `vaultproxy` system user.
+VaultProxy provides first-class, cross-platform packaging and distribution options for developers and DevOps engineers on **Linux**, **macOS**, and **Windows**, as well as zero-dependency tools for Python and Node.js environments.
 
 ---
 
-## 1. Arch Linux (`pacman` / AUR)
+## 1. Quick Install for Developers (Cross-Platform)
 
-The Arch Linux package is defined in [`packaging/arch/PKGBUILD`](file:///home/aniket/october/packaging/arch/PKGBUILD).
+### Python Ecosystem (`pipx` / `uv` / `pip`)
 
-### Installing via AUR Helper (`yay` or `paru`)
+The easiest way to run VaultProxy on any platform is via standalone CLI package tools:
+
 ```bash
-yay -S vaultproxy
-# or
-paru -S vaultproxy
+# 1. Using pipx (isolated application environment)
+pipx install vaultproxy
+# or run directly without installing:
+pipx run vaultproxy run
+
+# 2. Using uv / uvx (extremely fast)
+uv tool install vaultproxy
+# or run directly:
+uvx vaultproxy run
+
+# 3. Standard pip
+pip install vaultproxy
 ```
 
-### Manual Build with `makepkg`
-```bash
-git clone https://github.com/aniketchaudharyaa113/vaultproxy.git
-cd vaultproxy/packaging/arch
-makepkg -si
-```
+### Node.js Ecosystem (`npx` / `npm`)
 
-### Direct `pacman` Install
-If you have a compiled `.pkg.tar.zst`:
-```bash
-sudo pacman -U vaultproxy-0.2.1-1-any.pkg.tar.zst
-```
+Developers in JavaScript, TypeScript, React, and Node.js ecosystems can run VaultProxy without manually configuring Python:
 
-The Arch installation scriptlet [`packaging/arch/vaultproxy.install`](file:///home/aniket/october/packaging/arch/vaultproxy.install) automatically registers the `vaultproxy` daemon system account, creates `/var/lib/vaultproxy`, and secures the configuration file.
+```bash
+# Direct zero-install execution via npx:
+npx vaultproxy run
+npx vaultproxy check --file .env
+npx vaultproxy scan --fail-on-secrets
+
+# Or install globally:
+npm install -g vaultproxy
+```
 
 ---
 
-## 2. Debian & Ubuntu (`apt` / `.deb`)
+## 2. macOS Packaging (Homebrew & Launchd)
 
-Debian package metadata is configured in [`packaging/debian/`](file:///home/aniket/october/packaging/debian/).
+### Homebrew Formula
+VaultProxy provides a native Homebrew formula in [`packaging/homebrew/vaultproxy.rb`](file:///home/aniket/october/packaging/homebrew/vaultproxy.rb) supporting both Apple Silicon (M1/M2/M3/M4) and Intel architectures.
 
-### Building the `.deb` Package
-VaultProxy includes a zero-dependency package builder ([`packaging/build_deb.py`](file:///home/aniket/october/packaging/build_deb.py)) that produces a compliant Debian binary package on any system:
+```bash
+# Install via tap
+brew install aniketchaudharyaa113/tap/vaultproxy
+
+# Manage background service with brew services
+brew services start vaultproxy
+brew services stop vaultproxy
+```
+
+### Launchd Daemon
+For production background execution on macOS without Homebrew, use the launchd plist configuration at [`packaging/launchd/com.vaultproxy.daemon.plist`](file:///home/aniket/october/packaging/launchd/com.vaultproxy.daemon.plist):
+
+```bash
+cp packaging/launchd/com.vaultproxy.daemon.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.vaultproxy.daemon.plist
+```
+
+---
+
+## 3. Windows Packaging (PowerShell, Batch & WinSW Service)
+
+### PowerShell Automated Installer
+VaultProxy includes a Windows installer script in [`packaging/windows/install.ps1`](file:///home/aniket/october/packaging/windows/install.ps1):
+
+```powershell
+# Run in PowerShell
+.\packaging\windows\install.ps1
+```
+
+### Windows Command Runner
+For Command Prompt (`cmd.exe`) users, [`packaging/windows/vaultproxy.cmd`](file:///home/aniket/october/packaging/windows/vaultproxy.cmd) automatically delegates to Python or the installed binary.
+
+### Native Windows Service (Enterprise & DevOps)
+To run VaultProxy as an unprivileged, automatic background service on Windows Server or workstations, use the WinSW definition in [`packaging/windows/winsw.xml`](file:///home/aniket/october/packaging/windows/winsw.xml):
+
+```powershell
+# Using WinSW (Windows Service Wrapper)
+winsw.exe install packaging\windows\winsw.xml
+winsw.exe start vaultproxy
+```
+
+---
+
+## 4. Linux Distribution Packaging (Arch, Debian, Fedora)
+
+VaultProxy provides first-class native Linux packaging for primary distribution families:
+- **Arch Linux** (`pacman` / AUR): [`packaging/arch/PKGBUILD`](file:///home/aniket/october/packaging/arch/PKGBUILD)
+- **Debian / Ubuntu** (`apt` / `.deb`): [`packaging/debian/`](file:///home/aniket/october/packaging/debian/)
+- **Fedora / RHEL / CentOS** (`dnf` / `.rpm`): [`packaging/fedora/vaultproxy.spec`](file:///home/aniket/october/packaging/fedora/vaultproxy.spec)
+
+### Debian & Ubuntu (.deb)
 ```bash
 python3 packaging/build_deb.py
-```
-This generates `dist/vaultproxy_0.2.1_all.deb`.
-
-### Installing with `apt` or `dpkg`
-```bash
-# Install via apt (automatically resolves system dependencies)
-sudo apt update
 sudo apt install -y ./dist/vaultproxy_0.2.1_all.deb
-
-# Or install via dpkg
-sudo dpkg -i dist/vaultproxy_0.2.1_all.deb
-sudo apt-get install -f  # resolve any missing runtime libraries
 ```
 
-### Package Contents
-- Binary: `/usr/bin/vaultproxy`
-- Python Library: `/usr/lib/python3/dist-packages/vaultproxy/`
-- Systemd Unit: `/lib/systemd/system/vaultproxy.service`
-- Configuration: `/etc/vaultproxy/config.env` (managed as a protected `conffile`)
-- State Directory: `/var/lib/vaultproxy` (`drwxr-x--- vaultproxy:vaultproxy`)
-
----
-
-## 3. Fedora, RHEL & CentOS (`dnf` / `.rpm`)
-
-The RPM specification is provided in [`packaging/fedora/vaultproxy.spec`](file:///home/aniket/october/packaging/fedora/vaultproxy.spec).
-
-### Building the RPM
-Run the helper script [`packaging/build_rpm.py`](file:///home/aniket/october/packaging/build_rpm.py):
+### Fedora, RHEL & CentOS (.rpm)
 ```bash
 python3 packaging/build_rpm.py
-```
-On a Fedora/RHEL system with `rpm-build` installed, this compiles the `.rpm` directly into `dist/rpmbuild/RPMS/noarch/`.
-
-### Manual RPM Build on Fedora
-```bash
-sudo dnf install -y rpm-build python3-devel python3-setuptools systemd-rpm-macros
-mkdir -p ~/rpmbuild/{SOURCES,SPECS}
-python3 packaging/build_rpm.py  # creates dist/vaultproxy-0.2.1.tar.gz
-cp dist/vaultproxy-0.2.1.tar.gz ~/rpmbuild/SOURCES/
-cp packaging/fedora/vaultproxy.spec ~/rpmbuild/SPECS/
-rpmbuild -ba ~/rpmbuild/SPECS/vaultproxy.spec
+sudo dnf install -y dist/rpmbuild/RPMS/noarch/vaultproxy-0.2.1-1*.rpm
 ```
 
-### Installing with `dnf`
+### Arch Linux (AUR / PKGBUILD)
 ```bash
-sudo dnf install -y ~/rpmbuild/RPMS/noarch/vaultproxy-0.2.1-1*.rpm
+cd packaging/arch && makepkg -si
+```
+
+### Linux Systemd Service Sandbox
+All Linux packages install the systemd unit [`packaging/systemd/vaultproxy.service`](file:///home/aniket/october/packaging/systemd/vaultproxy.service) with full privilege isolation (`User=vaultproxy`, `ProtectSystem=full`, `ProtectHome=true`, `NoNewPrivileges=true`).
+
+```bash
+sudo systemctl enable --now vaultproxy
+sudo systemctl status vaultproxy
 ```
 
 ---
 
-## 4. Systemd Service & Management
+## 5. DevOps & CI/CD Secret Scanning
 
-All three package formats install the hardened systemd unit [`packaging/systemd/vaultproxy.service`](file:///home/aniket/october/packaging/systemd/vaultproxy.service).
+To prevent team members from accidentally committing or sending `.env` files and credentials to external LLMs, use pre-commit hooks or CI/CD pipelines.
 
-### Security Sandbox
-The service runs with extensive Linux kernel privilege restrictions:
-- `User=vaultproxy` & `Group=vaultproxy` (isolated system daemon account)
-- `ProtectSystem=full` (read-only `/usr`, `/boot`, `/etc`)
-- `ProtectHome=true` (inaccessible `/root`, `/home`)
-- `NoNewPrivileges=true` (prevents privilege escalation)
-- `PrivateTmp=true` (dedicated `/tmp` namespace)
+### Git Pre-Commit Hook Integration
 
-### Configuration
-Edit `/etc/vaultproxy/config.env` to configure your upstream provider and secrets:
-```bash
-sudo nano /etc/vaultproxy/config.env
-```
-Example configuration:
-```env
-VAULT_PROFILE=production
-VAULT_AUTH_TOKEN=your_strong_secret_token_here
-UPSTREAM_BASE_URL=https://api.openai.com/v1
-UPSTREAM_API_KEY=your_openai_or_anthropic_api_key
-GEMMA_BACKEND=off
-STRICT_MODE=false
+Add VaultProxy to your repository's `.pre-commit-config.yaml`:
+
+```yaml
+repos:
+  - repo: https://github.com/aniketchaudharyaa113/vaultproxy
+    rev: v0.2.1
+    hooks:
+      - id: vaultproxy-scan
 ```
 
-### Managing the Service
+### CI/CD Pipeline Scanning
+In GitHub Actions, GitLab CI, or Jenkins:
+
 ```bash
-# Reload systemd configuration
-sudo systemctl daemon-reload
+# Scan working directory for leaked .env files and cloud secrets; exits with code 1 if found
+vaultproxy scan . --fail-on-secrets
 
-# Start and enable VaultProxy on system boot
-sudo systemctl enable --now vaultproxy
-
-# View live service logs
-sudo journalctl -u vaultproxy -f
-
-# Check status and health
-sudo systemctl status vaultproxy
-curl http://127.0.0.1:8000/healthz
+# Dry-run check on specific configuration files with JSON output
+vaultproxy check --file .env --fail-on-secrets --json
 ```
